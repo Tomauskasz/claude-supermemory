@@ -120,6 +120,138 @@ function loadLegacyCodexConfig() {
   }
 }
 
+function stripJsoncComments(content) {
+  let result = '';
+  let index = 0;
+  let inString = false;
+  let singleLineComment = false;
+  let multiLineComment = false;
+
+  while (index < content.length) {
+    const char = content[index];
+    const next = content[index + 1];
+
+    if (!singleLineComment && !multiLineComment && char === '"') {
+      let backslashes = 0;
+      for (
+        let cursor = index - 1;
+        cursor >= 0 && content[cursor] === '\\';
+        cursor--
+      ) {
+        backslashes++;
+      }
+      if (backslashes % 2 === 0) inString = !inString;
+      result += char;
+      index++;
+      continue;
+    }
+
+    if (inString) {
+      result += char;
+      index++;
+      continue;
+    }
+
+    if (
+      !singleLineComment &&
+      !multiLineComment &&
+      char === '/' &&
+      next === '/'
+    ) {
+      singleLineComment = true;
+      index += 2;
+      continue;
+    }
+    if (
+      !singleLineComment &&
+      !multiLineComment &&
+      char === '/' &&
+      next === '*'
+    ) {
+      multiLineComment = true;
+      index += 2;
+      continue;
+    }
+    if (singleLineComment) {
+      if (char === '\n') {
+        singleLineComment = false;
+        result += char;
+      }
+      index++;
+      continue;
+    }
+    if (multiLineComment) {
+      if (char === '*' && next === '/') {
+        multiLineComment = false;
+        index += 2;
+        continue;
+      }
+      if (char === '\n') result += char;
+      index++;
+      continue;
+    }
+
+    result += char;
+    index++;
+  }
+
+  return result.replace(/,\s*([}\]])/g, '$1');
+}
+
+function loadLegacyOpenCodeConfig() {
+  const configDir = path.join(os.homedir(), '.config', 'opencode');
+  for (const filename of ['supermemory.jsonc', 'supermemory.json']) {
+    try {
+      const configPath = path.join(configDir, filename);
+      if (!fs.existsSync(configPath)) continue;
+      return JSON.parse(
+        stripJsoncComments(fs.readFileSync(configPath, 'utf-8')),
+      );
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function getLegacyOpenCodeUserTags(cwd) {
+  const config = loadLegacyOpenCodeConfig();
+  let identity = null;
+  try {
+    identity = execSync('git config user.email', {
+      cwd: getProjectBasePath(cwd),
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+  } catch {}
+  identity =
+    identity || process.env.USER || process.env.USERNAME || 'anonymous';
+  const suffix = sha256(identity);
+  return uniqueTags([
+    config?.userContainerTag,
+    `${config?.containerTagPrefix || 'opencode'}_user_${suffix}`,
+    `opencode_user_${suffix}`,
+  ]);
+}
+
+function getLegacyOpenCodeProjectTags(cwd) {
+  const config = loadLegacyOpenCodeConfig();
+  const hashes = [
+    ...new Set(
+      [cwd, path.resolve(cwd), getProjectBasePath(cwd)].map((value) =>
+        sha256(value),
+      ),
+    ),
+  ];
+  return uniqueTags([
+    config?.projectContainerTag,
+    ...hashes.flatMap((suffix) => [
+      `${config?.containerTagPrefix || 'opencode'}_project_${suffix}`,
+      `opencode_project_${suffix}`,
+    ]),
+  ]);
+}
+
 function getLegacyCodexUserTags(cwd) {
   const config = loadLegacyCodexConfig();
   const defaultTag = getLegacyCodexUserTag(cwd);
@@ -207,11 +339,13 @@ function getPersonalReadTags(cwd) {
   const legacyCodexConfig = loadLegacyCodexConfig();
   return uniqueTags([
     getContainerTag(cwd),
+    getGeneratedRepoContainerTag(cwd),
     projectConfig?.personalContainerTag,
     legacyCodexConfig?.userContainerTag,
     getGeneratedContainerTag(cwd),
     getLegacyContainerTag(cwd),
     ...getLegacyCodexUserTags(cwd),
+    ...getLegacyOpenCodeUserTags(cwd),
   ]);
 }
 
@@ -221,6 +355,7 @@ function getProjectReadTags(cwd) {
     getGeneratedRepoContainerTag(cwd),
     getLegacyGeneratedRepoContainerTag(cwd),
     ...getLegacyCodexProjectTags(cwd),
+    ...getLegacyOpenCodeProjectTags(cwd),
   ]);
 }
 
@@ -239,6 +374,8 @@ module.exports = {
   getLegacyContainerTag,
   getLegacyCodexUserTag,
   getLegacyCodexProjectTag,
+  getLegacyOpenCodeUserTags,
+  getLegacyOpenCodeProjectTags,
   getRepoContainerTag,
   getGeneratedRepoContainerTag,
   getLegacyGeneratedRepoContainerTag,
