@@ -2,8 +2,6 @@
 
 <img width="4000" height="2130" alt="image (6)" src="https://github.com/user-attachments/assets/07e63ac4-b67d-457b-9029-1dc5d860e920" />
 
-> **✨ Requires [Supermemory Pro or above](https://app.supermemory.ai/?view=integrations)** - Unlock the state of the art memory for your Claude code.
-
 A Claude Code plugin that gives your AI persistent memory across sessions using [Supermemory](https://supermemory.ai).
 Your agent remembers what you worked on - across sessions, across projects.
 
@@ -46,6 +44,25 @@ export SUPERMEMORY_CC_API_KEY="sm_..."
 - **Reasoned recall** — Before each turn, Claude decides whether recalling memory would actually help your current message, and only searches when it's worth it — every turn, once in a while, or not at all. The search runs automatically (no permission prompt), just like auto-capture. Searching only when needed also keeps more usage on your plan
 - **supermemory-search** — Ask about past work or previous sessions, Claude searches your memories
 - **supermemory-save** — Ask to save something important, Claude saves it for the team
+
+### Shared Agents memory
+
+Claude Code, Codex, and OpenCode use one container for a repository:
+
+- `repo_<project-name>__<remote-hash>` stores automatic capture and every explicit save.
+- `sm_scope` metadata keeps personal and project memories filterable inside that container.
+
+The hash is derived from the normalized Git remote, so clones share memory while
+same-named repositories do not collide. Repositories without a remote fall back to
+a local path identity. The agent plugins also read the previous `user_project_*`,
+`repo_<project-name>`, `claudecode_project_*`, `codex_user_*`,
+`codex_project_*`, `opencode_user_*`, and `opencode_project_*` containers, so
+existing memories remain searchable without a migration. Set
+`SUPERMEMORY_ISOLATE_WORKTREES=true` to use the worktree path instead of the
+remote identity.
+
+Explicit `repoContainerTag`/`projectContainerTag` overrides remain the canonical
+write destination. Older personal/user overrides remain in the legacy read set.
 
 ## Commands
 
@@ -104,8 +121,8 @@ Per-repo overrides. Run `/supermemory:project-config` or create manually:
 | ---------------------- | --------------------------- |
 | `apiKey`               | Project-specific API key    |
 | `baseUrl`              | Supermemory API URL    |
-| `personalContainerTag` | Override personal container |
-| `repoContainerTag`     | Override team container tag |
+| `personalContainerTag` | Legacy personal container retained for reads |
+| `repoContainerTag`     | Override unified project container tag |
 
 ## License
 

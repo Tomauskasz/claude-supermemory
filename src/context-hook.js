@@ -1,9 +1,5 @@
 const { SupermemoryClient } = require('./lib/supermemory-client');
-const {
-  getContainerTag,
-  getRepoContainerTag,
-  getProjectName,
-} = require('./lib/container-tag');
+const { getProjectName, getAllReadTags } = require('./lib/container-tag');
 const { loadProjectConfig } = require('./lib/project-config');
 const {
   loadSettings,
@@ -95,10 +91,9 @@ Or set SUPERMEMORY_CC_API_KEY environment variable manually.
 
     const baseUrl = getBaseUrl(cwd, projectConfig);
     const client = new SupermemoryClient(apiKey, undefined, { baseUrl });
-    const personalTag = getContainerTag(cwd);
-    const repoTag = getRepoContainerTag(cwd);
+    const readTags = getAllReadTags(cwd);
 
-    debugLog(settings, 'Fetching contexts', { personalTag, repoTag });
+    debugLog(settings, 'Fetching project context', { readTags });
 
     const apiErrors = [];
 
@@ -119,50 +114,38 @@ Or set SUPERMEMORY_CC_API_KEY environment variable manually.
       return null;
     };
 
-    const [personalResult, repoResult] = await Promise.all([
-      client
-        .getProfile(personalTag, projectName)
-        .catch(handleProfileError('personal')),
-      client.getProfile(repoTag, projectName).catch(handleProfileError('repo')),
-    ]);
+    const projectResult = await client
+      .getProfileMany(readTags, projectName, {
+        limit: settings.maxProfileItems,
+      })
+      .catch(handleProfileError('project'));
 
-    const personalContext = formatContext(
-      personalResult,
+    const projectContext = formatContext(
+      projectResult,
       true,
       false,
       settings.maxProfileItems,
       false,
     );
 
-    const repoContext = formatContext(
-      repoResult,
-      true,
-      false,
-      settings.maxProfileItems,
-      false,
-    );
-
-    const personalCount =
-      (personalResult?.profile?.static?.length || 0) +
-      (personalResult?.profile?.dynamic?.length || 0);
-    const repoCount =
-      (repoResult?.profile?.static?.length || 0) +
-      (repoResult?.profile?.dynamic?.length || 0);
-    const totalInjected = personalCount + repoCount;
+    const profileCount =
+      (projectResult?.profile?.static?.length || 0) +
+      (projectResult?.profile?.dynamic?.length || 0);
+    const searchCount = projectResult?.searchResults?.results?.length || 0;
+    const totalInjected = profileCount + searchCount;
 
     writeState({
       memoriesInjected: totalInjected,
-      personalCount,
-      repoCount,
+      personalCount: 0,
+      repoCount: totalInjected,
       sessionActive: true,
       ingesting: false,
     });
 
     const additionalContext = combineContexts([
-      { label: '### Personal Memories', content: personalContext },
       {
-        label: '### Project Knowledge (Shared across team)',
-        content: repoContext,
+        label: '### Project Memories (Shared across agents)',
+        content: projectContext,
       },
     ]);
 
@@ -194,8 +177,7 @@ Memories will be saved as you work.
 
     debugLog(settings, 'Context generated', {
       length: additionalContext.length,
-      hasPersonal: !!personalContext,
-      hasRepo: !!repoContext,
+      hasProject: !!projectContext,
     });
 
     const updateNotice = await updateCheck;
