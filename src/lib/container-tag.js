@@ -120,6 +120,73 @@ function loadLegacyCodexConfig() {
   }
 }
 
+function loadLegacyCursorConfig(cwd) {
+  const globalConfigPath = path.join(
+    os.homedir(),
+    '.config',
+    'cursor',
+    'supermemory.json',
+  );
+  let globalConfig = null;
+  try {
+    if (fs.existsSync(globalConfigPath)) {
+      globalConfig = JSON.parse(fs.readFileSync(globalConfigPath, 'utf-8'));
+    }
+  } catch {}
+
+  let projectConfig = null;
+  let directory = path.resolve(cwd);
+  while (true) {
+    const configPath = path.join(
+      directory,
+      '.cursor',
+      '.supermemory',
+      'config.json',
+    );
+    try {
+      if (fs.existsSync(configPath)) {
+        projectConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        break;
+      }
+    } catch {}
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+
+  return { ...(globalConfig || {}), ...(projectConfig || {}) };
+}
+
+function getLegacyCursorUserTags(cwd) {
+  const config = loadLegacyCursorConfig(cwd);
+  let gitEmail = null;
+  try {
+    gitEmail = execSync('git config user.email', {
+      cwd: getProjectBasePath(cwd),
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+  } catch {}
+  const machineId = `${os.hostname()}_${os.userInfo().username}`;
+  return uniqueTags([
+    config.userContainerTag ||
+      process.env.SUPERMEMORY_USER_TAG ||
+      process.env.CURSOR_USER_EMAIL ||
+      gitEmail ||
+      machineId,
+  ]).map((identity) => `cursor_user_${sha256(identity)}`);
+}
+
+function getLegacyCursorProjectTags(cwd) {
+  const config = loadLegacyCursorConfig(cwd);
+  const basePath = getProjectBasePath(cwd);
+  return uniqueTags([
+    config.projectContainerTag ||
+      process.env.SUPERMEMORY_PROJECT_TAG ||
+      basePath,
+  ]).map((identity) => `cursor_project_${sha256(identity)}`);
+}
+
 function stripJsoncComments(content) {
   let result = '';
   let index = 0;
@@ -317,7 +384,10 @@ function getRepoContainerTag(cwd) {
   const projectConfig = loadProjectConfig(cwd);
   return (
     projectConfig?.repoContainerTag ||
+    process.env.SUPERMEMORY_REPO_TAG ||
+    loadLegacyCursorConfig(cwd)?.repoContainerTag ||
     loadLegacyCodexConfig()?.projectContainerTag ||
+    loadLegacyOpenCodeConfig()?.projectContainerTag ||
     getGeneratedRepoContainerTag(cwd)
   );
 }
@@ -346,6 +416,7 @@ function getPersonalReadTags(cwd) {
     getLegacyContainerTag(cwd),
     ...getLegacyCodexUserTags(cwd),
     ...getLegacyOpenCodeUserTags(cwd),
+    ...getLegacyCursorUserTags(cwd),
   ]);
 }
 
@@ -356,6 +427,7 @@ function getProjectReadTags(cwd) {
     getLegacyGeneratedRepoContainerTag(cwd),
     ...getLegacyCodexProjectTags(cwd),
     ...getLegacyOpenCodeProjectTags(cwd),
+    ...getLegacyCursorProjectTags(cwd),
   ]);
 }
 
@@ -376,6 +448,8 @@ module.exports = {
   getLegacyCodexProjectTag,
   getLegacyOpenCodeUserTags,
   getLegacyOpenCodeProjectTags,
+  getLegacyCursorUserTags,
+  getLegacyCursorProjectTags,
   getRepoContainerTag,
   getGeneratedRepoContainerTag,
   getLegacyGeneratedRepoContainerTag,

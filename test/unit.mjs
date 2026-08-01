@@ -64,7 +64,7 @@ function readTags(cwd, home) {
 }
 
 describe('unified container tags', () => {
-  test('writes one stable canonical tag and reads Claude, Codex, and OpenCode legacy tags', (t) => {
+  test('writes one stable canonical tag and reads all agent legacy tags', (t) => {
     const { repo, git, home } = makeRepo(t);
     const tags = readTags(repo, home);
     const pathHash = hash16(git(['rev-parse', '--show-toplevel']));
@@ -80,12 +80,16 @@ describe('unified container tags', () => {
       `claudecode_project_${pathHash}`,
       `codex_user_${userHash}`,
       `opencode_user_${userHash}`,
+      `cursor_user_${userHash}`,
     ]);
     assert.deepEqual(tags.projectReads, [
       canonicalTag,
       'repo_example_project',
       `codex_project_${pathHash}`,
-      `opencode_project_${pathHash}`,
+      ...[...new Set([hash16(repo), pathHash])].map(
+        (hash) => `opencode_project_${hash}`,
+      ),
+      `cursor_project_${pathHash}`,
     ]);
   });
 
