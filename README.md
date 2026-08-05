@@ -124,6 +124,11 @@ Per-repo overrides. Run `/supermemory:project-config` or create manually:
 | `personalContainerTag` | Legacy personal container retained for reads |
 | `repoContainerTag`     | Override unified project container tag |
 
+## Privacy
+
+For information about how Supermemory collects, uses, and retains data, see the
+[Supermemory Privacy Policy](https://supermemory.ai/privacy/).
+
 ## License
 
 MIT

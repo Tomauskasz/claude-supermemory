@@ -8,6 +8,7 @@
     "email": "support@supermemory.ai"
   },
   "homepage": "https://supermemory.ai",
+  "privacyPolicy": "https://supermemory.ai/privacy/",
   "repository": "https://github.com/supermemoryai/claude-supermemory",
   "license": "MIT",
   "keywords": [
