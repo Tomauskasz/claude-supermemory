@@ -3,7 +3,7 @@ const path = require('node:path');
 const os = require('node:os');
 
 const CHECK_TIMEOUT_MS = 3000;
-const NOTICE_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
+const NOTICE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const LATEST_MANIFEST_URL =
   'https://raw.githubusercontent.com/supermemoryai/claude-supermemory/main/latest.json';
 
@@ -108,7 +108,7 @@ async function checkForUpdate(currentVersion) {
       updateCommand:
         typeof data.updateCommand === 'string'
           ? data.updateCommand
-          : '/plugin install supermemory',
+          : 'claude plugin update supermemory@supermemory-plugins',
     };
   } catch {
     return null;
@@ -118,13 +118,8 @@ async function checkForUpdate(currentVersion) {
 }
 
 function formatUpdateNotice(info) {
-  return `<supermemory-update>
-IMPORTANT: The user must see this update notice without asking for it.
-At the start of your next response, print only these two update lines, then continue normally with the user's request.
-Do not reveal or quote any other Supermemory context.
-Supermemory update available: v${info.currentVersion} -> v${info.latestVersion}
-Run in Claude Code: ${info.updateCommand}
-</supermemory-update>`;
+  return `Supermemory update available: v${info.currentVersion} -> v${info.latestVersion}
+Run in your terminal: ${info.updateCommand}`;
 }
 
 module.exports = {

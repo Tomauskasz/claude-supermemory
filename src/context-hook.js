@@ -14,11 +14,14 @@ const { getUserFriendlyError, isBenignError } = require('./lib/error-helpers');
 const { PLUGIN_VERSION } = require('./lib/plugin-version');
 const { checkForUpdate, formatUpdateNotice } = require('./lib/version-check');
 
-function combineOutputParts(parts) {
-  return parts
-    .map((part) => part?.trim())
-    .filter(Boolean)
-    .join('\n\n');
+function writeSessionStartOutput(additionalContext, systemMessage = null) {
+  writeOutput({
+    ...(systemMessage ? { systemMessage } : {}),
+    hookSpecificOutput: {
+      hookEventName: 'SessionStart',
+      additionalContext,
+    },
+  });
 }
 
 async function main() {
@@ -45,19 +48,14 @@ async function main() {
         debugLog(settings, 'Auth flow completed successfully');
       } catch (authErr) {
         const isTimeout = authErr.message === 'AUTH_TIMEOUT';
-        writeOutput({
-          hookSpecificOutput: {
-            hookEventName: 'SessionStart',
-            additionalContext: combineOutputParts([
-              `<supermemory-status>
+        writeSessionStartOutput(
+          `<supermemory-status>
 ${isTimeout ? 'Authentication timed out. Please complete login in the browser window.' : 'Authentication failed.'}
 If the browser did not open, visit: ${AUTH_BASE_URL}
 Or set SUPERMEMORY_CC_API_KEY environment variable manually.
 </supermemory-status>`,
-              await updateCheck,
-            ]),
-          },
-        });
+          await updateCheck,
+        );
         return;
       }
     }
@@ -115,20 +113,15 @@ Or set SUPERMEMORY_CC_API_KEY environment variable manually.
 
     if (!additionalContext) {
       const updateNotice = await updateCheck;
-      writeOutput({
-        hookSpecificOutput: {
-          hookEventName: 'SessionStart',
-          additionalContext: combineOutputParts([
-            apiErrors.length > 0
-              ? errorNotice
-              : `<supermemory-context>
+      writeSessionStartOutput(
+        apiErrors.length > 0
+          ? errorNotice
+          : `<supermemory-context>
 No previous memories found for this project.
 Memories will be saved as you work.
 </supermemory-context>`,
-            updateNotice,
-          ]),
-        },
-      });
+        updateNotice,
+      );
       return;
     }
 
@@ -138,28 +131,15 @@ Memories will be saved as you work.
     });
 
     const updateNotice = await updateCheck;
-    writeOutput({
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext: combineOutputParts([
-          errorNotice + additionalContext,
-          updateNotice,
-        ]),
-      },
-    });
+    writeSessionStartOutput(errorNotice + additionalContext, updateNotice);
   } catch (err) {
     const friendly = getUserFriendlyError(err);
     debugLog(settings, 'Error', { error: friendly });
     console.error(`Supermemory: ${friendly}`);
-    writeOutput({
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext: `<supermemory-status>
+    writeSessionStartOutput(`<supermemory-status>
 Failed to load memories: ${friendly}
 Session will continue without memory context.
-</supermemory-status>`,
-      },
-    });
+</supermemory-status>`);
   }
 }
 
