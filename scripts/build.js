@@ -16,6 +16,7 @@ const hooks = [
   'add-memory',
   'save-project-memory',
   'status',
+  'install-statusline',
   'statusline',
 ];
 

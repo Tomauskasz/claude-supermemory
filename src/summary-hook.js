@@ -26,11 +26,12 @@ const { writeState } = require('./lib/statusline-state');
 
 async function main() {
   const settings = loadSettings();
+  let sessionId;
 
   try {
     const input = await readStdin();
     const cwd = input.cwd || process.cwd();
-    const sessionId = input.session_id;
+    sessionId = input.session_id;
     const transcriptPath = input.transcript_path;
     const projectConfig = loadProjectConfig(cwd);
 
@@ -67,7 +68,6 @@ async function main() {
 
     if (!formatted) {
       debugLog(settings, 'No new content to save');
-      writeState({ ingesting: false, lastIngestStatus: 'skipped' });
       writeOutput({ continue: true });
       return;
     }
@@ -77,11 +77,7 @@ async function main() {
     const containerTag = getContainerTag(cwd);
     const projectName = getProjectName(cwd);
 
-    // Count turns/signals as a proxy for "things learnt"
-    const turnCount = (formatted.match(/<\|start\|>/g) || []).length;
-    const learntCount = Math.max(1, Math.ceil(turnCount / 2));
-
-    writeState({ ingesting: true, learntCount });
+    writeState(sessionId, 'capture', { status: 'saving' });
 
     const result = await client.addMemory(
       formatted,
@@ -97,18 +93,25 @@ async function main() {
       { customId: sessionId, entityContext: PERSONAL_ENTITY_CONTEXT },
     );
 
+    writeState(sessionId, 'capture', { status: 'saved' });
+
     if (result?.id) {
-      saveLastSession({ id: result.id, containerTag });
+      try {
+        saveLastSession({ id: result.id, containerTag });
+      } catch (err) {
+        debugLog(settings, 'Could not update local last-session metadata', {
+          error: getUserFriendlyError(err),
+        });
+      }
     }
 
-    writeState({ ingesting: false, lastIngestStatus: 'saved', lastIngestAt: Date.now(), learntCount });
     debugLog(settings, 'Session turn saved', { length: formatted.length });
     writeOutput({ continue: true });
   } catch (err) {
     const friendly = getUserFriendlyError(err);
     debugLog(settings, 'Error', { error: friendly });
     console.error(`Supermemory: ${friendly}`);
-    writeState({ ingesting: false, lastIngestStatus: 'error' });
+    writeState(sessionId, 'capture', { status: 'error' });
     writeOutput({ continue: true });
   }
 }

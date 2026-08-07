@@ -1,7 +1,7 @@
 ---
 name: supermemory-search
 description: Search your coding memory. Use when user asks about past work, previous sessions, how something was implemented, what they worked on before, or wants to recall information from earlier sessions.
-allowed-tools: Bash(node:*)
+allowed-tools: Bash(node:*) PowerShell(node:*)
 ---
 
 # Supermemory Search
@@ -13,7 +13,7 @@ Search Supermemory for past coding sessions, decisions, and saved information.
 Run the search script with the user's query and optional scope flag:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/search-memory.cjs" [--user|--repo|--both] "USER_QUERY_HERE"
+node '${CLAUDE_PLUGIN_ROOT}/scripts/search-memory.cjs' --statusline-data-dir '${CLAUDE_PLUGIN_DATA}' [--user|--repo|--both] "USER_QUERY_HERE"
 ```
 
 ### Scope Flags
@@ -27,18 +27,18 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/search-memory.cjs" [--user|--repo|--both] "U
 - User asks "what did I work on yesterday":
 
   ```bash
-  node "${CLAUDE_PLUGIN_ROOT}/scripts/search-memory.cjs" "work yesterday recent activity"
+  node '${CLAUDE_PLUGIN_ROOT}/scripts/search-memory.cjs' --statusline-data-dir '${CLAUDE_PLUGIN_DATA}' "work yesterday recent activity"
   ```
 
 - User asks "how did we implement auth" (project-specific):
 
   ```bash
-  node "${CLAUDE_PLUGIN_ROOT}/scripts/search-memory.cjs" --repo "authentication implementation"
+  node '${CLAUDE_PLUGIN_ROOT}/scripts/search-memory.cjs' --statusline-data-dir '${CLAUDE_PLUGIN_DATA}' --repo "authentication implementation"
   ```
 
 - User asks "what are my coding preferences":
   ```bash
-  node "${CLAUDE_PLUGIN_ROOT}/scripts/search-memory.cjs" --user "coding preferences style"
+  node '${CLAUDE_PLUGIN_ROOT}/scripts/search-memory.cjs' --statusline-data-dir '${CLAUDE_PLUGIN_DATA}' --user "coding preferences style"
   ```
 
 ## Present Results

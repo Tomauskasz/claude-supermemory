@@ -13,32 +13,42 @@ const { formatContext, combineContexts } = require('./lib/format-context');
 const { getUserFriendlyError, isBenignError } = require('./lib/error-helpers');
 const { PLUGIN_VERSION } = require('./lib/plugin-version');
 const { checkForUpdate, formatUpdateNotice } = require('./lib/version-check');
-const { writeState } = require('./lib/statusline-state');
+const {
+  countLoadedProfileItems,
+  pruneState,
+  resolveStatuslineDataDir,
+  writeState,
+} = require('./lib/statusline-state');
+const {
+  isStatuslineInstalled,
+  refreshInstalledStatusline,
+} = require('./lib/statusline-install');
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
 
-const STATUSLINE_ONBOARDED_FILE = path.join(os.homedir(), '.supermemory-claude', 'statusline-onboarded');
+const STATUSLINE_TIP_FILE = 'statusline-tip-shown';
 
-function getStatuslineOnboardingNotice() {
+function getStatuslineOnboardingNotice(dataDir) {
+  if (isStatuslineInstalled(dataDir)) return null;
+  const tipFile = path.join(dataDir, STATUSLINE_TIP_FILE);
+
   try {
-    if (fs.existsSync(STATUSLINE_ONBOARDED_FILE)) return null;
+    if (fs.existsSync(tipFile)) return null;
   } catch {
     // continue
   }
 
   try {
-    fs.mkdirSync(path.dirname(STATUSLINE_ONBOARDED_FILE), { recursive: true });
-    fs.writeFileSync(STATUSLINE_ONBOARDED_FILE, new Date().toISOString());
+    fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(tipFile, new Date().toISOString(), {
+      encoding: 'utf8',
+      mode: 0o600,
+    });
   } catch {
     // best-effort
   }
 
-  return `<supermemory-tip>
-**Supermemory statusline** — See memory activity live in your Claude Code statusline.
-Run \`/supermemory:statusline\` to set it up. Shows injected memory count, search results, and sync status.
-Learn more at https://supermemory.ai/docs/claude-code
-</supermemory-tip>`;
+  return 'Supermemory status line is available. Run /supermemory:statusline to enable it.';
 }
 
 function combineOutputParts(parts) {
@@ -48,12 +58,34 @@ function combineOutputParts(parts) {
     .join('\n\n');
 }
 
+function writeSessionStartOutput(additionalContext, systemMessage = null) {
+  writeOutput({
+    ...(systemMessage ? { systemMessage } : {}),
+    hookSpecificOutput: {
+      hookEventName: 'SessionStart',
+      additionalContext,
+    },
+  });
+}
+
 async function main() {
   const settings = loadSettings();
+  let sessionId;
+  let statuslineDataDir;
 
   try {
     const input = await readStdin();
+    sessionId = input.session_id;
     const cwd = input.cwd || process.cwd();
+    statuslineDataDir = resolveStatuslineDataDir();
+    refreshInstalledStatusline();
+    pruneState({ dataDir: statuslineDataDir });
+    writeState(
+      sessionId,
+      'context',
+      { status: 'loading', memoryItemsLoaded: 0 },
+      { dataDir: statuslineDataDir },
+    );
     const projectName = getProjectName(cwd);
     const updateCheck = checkForUpdate(PLUGIN_VERSION).then((info) =>
       info ? formatUpdateNotice(info) : null,
@@ -72,19 +104,20 @@ async function main() {
         debugLog(settings, 'Auth flow completed successfully');
       } catch (authErr) {
         const isTimeout = authErr.message === 'AUTH_TIMEOUT';
-        writeOutput({
-          hookSpecificOutput: {
-            hookEventName: 'SessionStart',
-            additionalContext: combineOutputParts([
-              `<supermemory-status>
+        writeState(
+          sessionId,
+          'context',
+          { status: 'error', memoryItemsLoaded: 0 },
+          { dataDir: statuslineDataDir },
+        );
+        writeSessionStartOutput(
+          `<supermemory-status>
 ${isTimeout ? 'Authentication timed out. Please complete login in the browser window.' : 'Authentication failed.'}
 If the browser did not open, visit: ${AUTH_BASE_URL}
 Or set SUPERMEMORY_CC_API_KEY environment variable manually.
 </supermemory-status>`,
-              await updateCheck,
-            ]),
-          },
-        });
+          await updateCheck,
+        );
         return;
       }
     }
@@ -128,19 +161,19 @@ Or set SUPERMEMORY_CC_API_KEY environment variable manually.
       false,
     );
 
-    const profileCount =
-      (projectResult?.profile?.static?.length || 0) +
-      (projectResult?.profile?.dynamic?.length || 0);
-    const searchCount = projectResult?.searchResults?.results?.length || 0;
-    const totalInjected = profileCount + searchCount;
-
-    writeState({
-      memoriesInjected: totalInjected,
-      personalCount: 0,
-      repoCount: totalInjected,
-      sessionActive: true,
-      ingesting: false,
-    });
+    const memoryItemsLoaded = countLoadedProfileItems(
+      projectResult,
+      settings.maxProfileItems,
+    );
+    writeState(
+      sessionId,
+      'context',
+      {
+        status: apiErrors.length > 0 ? 'error' : 'ready',
+        memoryItemsLoaded,
+      },
+      { dataDir: statuslineDataDir },
+    );
 
     const additionalContext = combineContexts([
       {
@@ -156,22 +189,18 @@ Or set SUPERMEMORY_CC_API_KEY environment variable manually.
 
     if (!additionalContext) {
       const updateNotice = await updateCheck;
-      const statuslineNotice = getStatuslineOnboardingNotice();
-      writeOutput({
-        hookSpecificOutput: {
-          hookEventName: 'SessionStart',
-          additionalContext: combineOutputParts([
-            apiErrors.length > 0
-              ? errorNotice
-              : `<supermemory-context>
+      writeSessionStartOutput(
+        apiErrors.length > 0
+          ? errorNotice
+          : `<supermemory-context>
 No previous memories found for this project.
 Memories will be saved as you work.
 </supermemory-context>`,
-            updateNotice,
-            statuslineNotice,
-          ]),
-        },
-      });
+        combineOutputParts([
+          updateNotice,
+          getStatuslineOnboardingNotice(statuslineDataDir),
+        ]),
+      );
       return;
     }
 
@@ -181,30 +210,27 @@ Memories will be saved as you work.
     });
 
     const updateNotice = await updateCheck;
-    const statuslineNotice = getStatuslineOnboardingNotice();
-    writeOutput({
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext: combineOutputParts([
-          errorNotice + additionalContext,
-          updateNotice,
-          statuslineNotice,
-        ]),
-      },
-    });
+    writeSessionStartOutput(
+      errorNotice + additionalContext,
+      combineOutputParts([
+        updateNotice,
+        getStatuslineOnboardingNotice(statuslineDataDir),
+      ]),
+    );
   } catch (err) {
     const friendly = getUserFriendlyError(err);
     debugLog(settings, 'Error', { error: friendly });
     console.error(`Supermemory: ${friendly}`);
-    writeOutput({
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext: `<supermemory-status>
+    writeState(
+      sessionId,
+      'context',
+      { status: 'error', memoryItemsLoaded: 0 },
+      { dataDir: statuslineDataDir },
+    );
+    writeSessionStartOutput(`<supermemory-status>
 Failed to load memories: ${friendly}
 Session will continue without memory context.
-</supermemory-status>`,
-      },
-    });
+</supermemory-status>`);
   }
 }
 

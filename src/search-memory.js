@@ -10,29 +10,13 @@ const { loadProjectConfig } = require('./lib/project-config');
 const { loadSettings, getApiKey, getBaseUrl } = require('./lib/settings');
 const { formatSearchResults } = require('./lib/format-context');
 const { getUserFriendlyError } = require('./lib/error-helpers');
+const { parseSearchArgs } = require('./lib/search-args');
 const { writeState } = require('./lib/statusline-state');
 
-function parseArgs(args) {
-  let containerType = 'both';
-  const queryParts = [];
-
-  for (const arg of args) {
-    if (arg === '--user') {
-      containerType = 'user';
-    } else if (arg === '--repo') {
-      containerType = 'repo';
-    } else if (arg === '--both') {
-      containerType = 'both';
-    } else {
-      queryParts.push(arg);
-    }
-  }
-
-  return { containerType, query: queryParts.join(' ') };
-}
-
 async function main() {
-  const { containerType, query } = parseArgs(process.argv.slice(2));
+  const { containerType, query, statuslineDataDir } = parseSearchArgs(
+    process.argv.slice(2),
+  );
 
   if (!query || !query.trim()) {
     console.log(
@@ -71,11 +55,16 @@ async function main() {
 
     if (containerType === 'both') {
       const result = await client.searchMany(query, allTags, { limit: 10 });
-      writeState({
-        lastSearchQuery: query,
-        lastSearchResults: result.results?.length || 0,
-        lastSearchAt: Date.now(),
-      });
+      writeState(
+        process.env.CLAUDE_CODE_SESSION_ID,
+        'search',
+        {
+          results: result.results?.length || 0,
+        },
+        {
+          dataDir: statuslineDataDir,
+        },
+      );
       console.log(formatSearchResults(query, result.results, 'Project'));
     } else {
       const tags = containerType === 'user' ? personalTags : repoTags;
@@ -88,11 +77,16 @@ async function main() {
         scope,
         { limit: 10 },
       );
-      writeState({
-        lastSearchQuery: query,
-        lastSearchResults: searchResult.results?.length || 0,
-        lastSearchAt: Date.now(),
-      });
+      writeState(
+        process.env.CLAUDE_CODE_SESSION_ID,
+        'search',
+        {
+          results: searchResult.results?.length || 0,
+        },
+        {
+          dataDir: statuslineDataDir,
+        },
+      );
       console.log(formatSearchResults(query, searchResult.results, label));
     }
   } catch (err) {
@@ -100,7 +94,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(`Fatal error: ${err.message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(`Fatal error: ${err.message}`);
+    process.exit(1);
+  });
+}

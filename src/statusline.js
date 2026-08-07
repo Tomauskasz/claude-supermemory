@@ -1,130 +1,174 @@
 const { readState } = require('./lib/statusline-state');
 
-const SYNC_TIMEOUT_MS = 15000;
-const SEARCH_DISPLAY_MS = 60000;
-const LEARNT_DISPLAY_MS = 120000;
+const SAVING_TTL_MS = 30 * 1000;
+const CAPTURE_TTL_MS = 2 * 60 * 1000;
+const SEARCH_TTL_MS = 60 * 1000;
+const CONTEXT_TTL_MS = 24 * 60 * 60 * 1000;
+const STATUSLINE_INPUT_TIMEOUT_MS = 500;
 
 const BLUE = '\x1b[38;2;59;53;243m';
-const BRIGHT = '\x1b[38;2;99;91;255m';
 const WHITE = '\x1b[97m';
 const BOLD = '\x1b[1m';
-const R = '\x1b[0m';
+const RESET = '\x1b[0m';
 
-// ── Things Added (session start — what supermemory brought to you) ──
-
-const ADDED_TEMPLATES = [
-  (n) => `${WHITE}surfaced ${BRIGHT}${n}${WHITE} intents${R}`,
-  (n) => `${WHITE}${BRIGHT}${n}${WHITE} intents in the chamber${R}`,
-  (n) => `${WHITE}primed with ${BRIGHT}${n}${WHITE} memories${R}`,
-  (n) => `${WHITE}${BRIGHT}${n}${WHITE} signals locked in${R}`,
-  (n) => `${WHITE}vibing on ${BRIGHT}${n}${WHITE} intents${R}`,
-  (n) => `${WHITE}${BRIGHT}${n}${WHITE} context threads pulled${R}`,
-  (n) => `${WHITE}wired into ${BRIGHT}${n}${WHITE} memories${R}`,
-  (n) => `${WHITE}${BRIGHT}${n}${WHITE} intents dialed in${R}`,
-  (n) => `${WHITE}tapped into ${BRIGHT}${n}${WHITE} signals${R}`,
-  (n) => `${WHITE}carrying ${BRIGHT}${n}${WHITE} memories${R}`,
-  (n) => `${WHITE}${BRIGHT}${n}${WHITE} intents on deck${R}`,
-  (n) => `${WHITE}channeling ${BRIGHT}${n}${WHITE} memories${R}`,
-  (n) => `${WHITE}running on ${BRIGHT}${n}${WHITE} intents${R}`,
-  (n) => `${WHITE}${BRIGHT}${n}${WHITE} signals active${R}`,
-  (n) => `${WHITE}powered by ${BRIGHT}${n}${WHITE} memories${R}`,
-  (n) => `${WHITE}${BRIGHT}${n}${WHITE} thoughts loaded${R}`,
-  (n) => `${WHITE}tuned to ${BRIGHT}${n}${WHITE} frequencies${R}`,
-];
-
-// ── Things Learnt (session end — what supermemory took from you) 📘 ──
-
-const LEARNT_TEMPLATES = [
-  (n) => `\uD83D\uDCD8 ${BRIGHT}learnt ${WHITE}${n}${BRIGHT} new things${R}`,
-  (n) => `\uD83D\uDCD8 ${BRIGHT}picked up ${WHITE}${n}${BRIGHT} insights${R}`,
-  (n) => `\uD83D\uDCD8 ${BRIGHT}absorbed ${WHITE}${n}${BRIGHT} patterns${R}`,
-  (n) => `\uD83D\uDCD8 ${WHITE}${n}${BRIGHT} new memories formed${R}`,
-  (n) => `\uD83D\uDCD8 ${BRIGHT}captured ${WHITE}${n}${BRIGHT} moments${R}`,
-  (n) => `\uD83D\uDCD8 ${WHITE}${n}${BRIGHT} lessons in the vault${R}`,
-  (n) => `\uD83D\uDCD8 ${BRIGHT}grew by ${WHITE}${n}${BRIGHT} memories${R}`,
-  (n) => `\uD83D\uDCD8 ${BRIGHT}banked ${WHITE}${n}${BRIGHT} insights${R}`,
-  (n) => `\uD83D\uDCD8 ${WHITE}${n}${BRIGHT} signals internalized${R}`,
-  (n) => `\uD83D\uDCD8 ${BRIGHT}leveled up with ${WHITE}${n}${BRIGHT} learnings${R}`,
-  (n) => `\uD83D\uDCD8 ${BRIGHT}distilled ${WHITE}${n}${BRIGHT} takeaways${R}`,
-  (n) => `\uD83D\uDCD8 ${WHITE}${n}${BRIGHT} new neurons fired${R}`,
-  (n) => `\uD83D\uDCD8 ${BRIGHT}encoded ${WHITE}${n}${BRIGHT} experiences${R}`,
-  (n) => `\uD83D\uDCD8 ${WHITE}${n}${BRIGHT} memories crystallized${R}`,
-];
-
-// ── Things Recalled (mid-session search — pulled back into context) 🔁 ──
-
-const RECALLED_TEMPLATES = [
-  (n) => `\uD83D\uDD01 ${WHITE}pulled ${BRIGHT}${n}${WHITE} memories back in${R}`,
-  (n) => `\uD83D\uDD01 ${WHITE}resurfaced ${BRIGHT}${n}${WHITE} facts${R}`,
-  (n) => `\uD83D\uDD01 ${BRIGHT}${n}${WHITE} memories re-entered the chat${R}`,
-  (n) => `\uD83D\uDD01 ${WHITE}brought back ${BRIGHT}${n}${WHITE} signals${R}`,
-  (n) => `\uD83D\uDD01 ${BRIGHT}${n}${WHITE} facts summoned${R}`,
-  (n) => `\uD83D\uDD01 ${WHITE}dug up ${BRIGHT}${n}${WHITE} memories${R}`,
-  (n) => `\uD83D\uDD01 ${BRIGHT}${n}${WHITE} context fragments restored${R}`,
-  (n) => `\uD83D\uDD01 ${WHITE}retrieved ${BRIGHT}${n}${WHITE} from the vault${R}`,
-  (n) => `\uD83D\uDD01 ${BRIGHT}${n}${WHITE} past signals reconnected${R}`,
-  (n) => `\uD83D\uDD01 ${WHITE}recalled ${BRIGHT}${n}${WHITE} memories${R}`,
-  (n) => `\uD83D\uDD01 ${BRIGHT}${n}${WHITE} facts reactivated${R}`,
-  (n) => `\uD83D\uDD01 ${WHITE}unearthed ${BRIGHT}${n}${WHITE} insights${R}`,
-];
-
-// ── Syncing (actively saving) ──
-
-const SYNC_TEMPLATES = [
-  () => `${BRIGHT}\u29BB syncing${R}`,
-  () => `${BRIGHT}\u29BB learning${R}`,
-  () => `${BRIGHT}\u29BB absorbing${R}`,
-  () => `${BRIGHT}\u29BB encoding to memory${R}`,
-  () => `${BRIGHT}\u29BB capturing session${R}`,
-  () => `${BRIGHT}\u29BB writing to the vault${R}`,
-  () => `${BRIGHT}\u29BB committing to memory${R}`,
-  () => `${BRIGHT}\u29BB saving the vibes${R}`,
-  () => `${BRIGHT}\u29BB forming new memories${R}`,
-  () => `${BRIGHT}\u29BB distilling insights${R}`,
-];
-
-function pick(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
+function isFresh(record, ttl, now, contextUpdatedAt = 0) {
+  return (
+    record &&
+    record.updatedAt >= contextUpdatedAt &&
+    now - record.updatedAt >= 0 &&
+    now - record.updatedAt < ttl
+  );
 }
 
-function main() {
-  const state = readState();
-  if (!state.updatedAt) return;
+function getStatusLabel(state, now = Date.now()) {
+  const context = state.context;
+  const generation = Number.isFinite(context?.updatedAt)
+    ? context.updatedAt
+    : 0;
+  const capture = state.capture;
+  const search = state.search;
 
-  const now = Date.now();
-  const brand = `${BRIGHT}\u26A1${BOLD}${WHITE}supermemory${R}`;
+  if (
+    capture?.status === 'saving' &&
+    isFresh(capture, SAVING_TTL_MS, now, generation)
+  ) {
+    return 'saving session';
+  }
 
-  // Sync always wins
-  if (state.ingesting) {
-    const elapsed = now - (state.ingestStartedAt || state.updatedAt);
-    if (elapsed < SYNC_TIMEOUT_MS) {
-      process.stdout.write(`${brand} ${pick(SYNC_TEMPLATES)()}`);
+  if (
+    capture?.status === 'saved' &&
+    isFresh(capture, CAPTURE_TTL_MS, now, generation)
+  ) {
+    return 'session captured';
+  }
+
+  if (
+    capture?.status === 'error' &&
+    isFresh(capture, SEARCH_TTL_MS, now, generation)
+  ) {
+    return 'session sync failed';
+  }
+
+  if (isFresh(search, SEARCH_TTL_MS, now, generation)) {
+    const count = search.results || 0;
+    return `${count} search ${count === 1 ? 'result' : 'results'}`;
+  }
+
+  if (!isFresh(context, CONTEXT_TTL_MS, now)) return null;
+  if (context.status !== 'ready') return null;
+  const count = context.memoryItemsLoaded || 0;
+  if (count === 0) return 'ready';
+  return `${count} memory ${count === 1 ? 'item' : 'items'} loaded`;
+}
+
+function renderStatusline(state, options = {}) {
+  const label = getStatusLabel(state, options.now);
+  if (!label) return '';
+  if (options.color === false) return `supermemory · ${label}`;
+  return `${BLUE}${BOLD}⚡ supermemory${RESET} ${WHITE}· ${label}${RESET}`;
+}
+
+function readStatuslineInput(input = process.stdin, options = {}) {
+  const timeoutMs = options.timeoutMs ?? STATUSLINE_INPUT_TIMEOUT_MS;
+
+  return new Promise((resolve, reject) => {
+    let data = '';
+    let settled = false;
+    let timer;
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      input.off('data', onData);
+      input.off('end', onEnd);
+      input.off('error', onError);
+      try {
+        input.pause();
+        input.unref?.();
+      } catch {
+        // Some test streams do not expose socket lifecycle methods.
+      }
+    };
+
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback(value);
+    };
+
+    const parse = (final) => {
+      const value = data.trim();
+      if (!value) {
+        if (final) finish(resolve, {});
+        return;
+      }
+
+      try {
+        finish(resolve, JSON.parse(value));
+      } catch (error) {
+        if (final) {
+          finish(
+            reject,
+            new Error(`Failed to parse statusline JSON: ${error.message}`),
+          );
+        }
+      }
+    };
+
+    function onData(chunk) {
+      data += chunk;
+      parse(false);
+    }
+
+    function onEnd() {
+      parse(true);
+    }
+
+    function onError(error) {
+      finish(reject, error);
+    }
+
+    input.setEncoding('utf8');
+    input.on('data', onData);
+    input.on('end', onEnd);
+    input.on('error', onError);
+
+    if (input.isTTY) {
+      finish(resolve, {});
       return;
     }
-  }
 
-  // Build pool
-  const pool = [];
-
-  // 📘 Things Learnt
-  if (state.lastIngestStatus === 'saved' && state.lastIngestAt && now - state.lastIngestAt < LEARNT_DISPLAY_MS) {
-    const n = state.learntCount || 1;
-    pool.push(pick(LEARNT_TEMPLATES)(n));
-  }
-
-  // Things Added
-  if (state.memoriesInjected != null && state.memoriesInjected > 0) {
-    pool.push(pick(ADDED_TEMPLATES)(state.memoriesInjected));
-  }
-
-  // 🔁 Things Recalled
-  if (state.lastSearchAt && now - state.lastSearchAt < SEARCH_DISPLAY_MS) {
-    pool.push(pick(RECALLED_TEMPLATES)(state.lastSearchResults || 0));
-  }
-
-  if (pool.length === 0) return;
-
-  process.stdout.write(`${brand} ${pick(pool)}`);
+    if (!settled) timer = setTimeout(() => parse(true), timeoutMs);
+  });
 }
 
-main();
+async function main() {
+  try {
+    const input = await readStatuslineInput();
+    const sessionId = input?.session_id;
+    if (!sessionId) return;
+
+    const state = readState(sessionId, {
+      dataDir: process.env.CLAUDE_PLUGIN_DATA || __dirname,
+    });
+    const output = renderStatusline(state);
+    if (output) process.stdout.write(output);
+  } catch {
+    // A status line must fail silently so it never disrupts Claude Code.
+  }
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  CAPTURE_TTL_MS,
+  CONTEXT_TTL_MS,
+  SAVING_TTL_MS,
+  SEARCH_TTL_MS,
+  STATUSLINE_INPUT_TIMEOUT_MS,
+  getStatusLabel,
+  readStatuslineInput,
+  renderStatusline,
+};
