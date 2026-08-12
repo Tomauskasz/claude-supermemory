@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, test } from 'node:test';
@@ -12,6 +12,7 @@ const {
   mergeProfileResponses,
   mergeSearchResponses,
 } = require('../src/lib/result-merge.js');
+const { buildSync } = require('esbuild');
 
 function hash16(value) {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
@@ -149,5 +150,113 @@ describe('cross-container result merging', () => {
     ]);
     assert.deepEqual(merged.profile.static, ['Uses pnpm']);
     assert.deepEqual(merged.profile.dynamic, ['Working on auth', 'Testing agents']);
+  });
+});
+
+describe('agent scope migration', () => {
+  const canonicalTag = 'custom_canonical_tag';
+  const legacyTag = 'claudecode_project_legacy';
+  const expectedFilters = {
+    AND: [
+      { key: 'agent_scope', value: 'personal', filterType: 'metadata' },
+    ],
+  };
+  let SupermemoryClient;
+
+  function loadSupermemoryClient() {
+    if (SupermemoryClient) return SupermemoryClient;
+
+    const outfile = join(process.cwd(), 'test', '.supermemory-client.test.cjs');
+    buildSync({
+      entryPoints: [join(process.cwd(), 'src', 'lib', 'supermemory-client.js')],
+      bundle: true,
+      format: 'cjs',
+      platform: 'node',
+      outfile,
+    });
+    SupermemoryClient = require(outfile).SupermemoryClient;
+    rmSync(outfile, { force: true });
+    return SupermemoryClient;
+  }
+
+  function createScopedClient() {
+    const searchCalls = [];
+    const profileCalls = [];
+    const Client = loadSupermemoryClient();
+    const client = new Client('sm_12345678901234567890', canonicalTag);
+    client.client = {
+      search: {
+        memories: async (payload) => {
+          searchCalls.push(payload);
+          return { results: [], total: 0, timing: 0 };
+        },
+      },
+      profile: async (payload) => {
+        profileCalls.push(payload);
+        return { profile: { static: [], dynamic: [] } };
+      },
+    };
+    return { client, searchCalls, profileCalls };
+  }
+
+  test('filters canonical scoped searches by agent_scope only', async () => {
+    const { client, searchCalls } = createScopedClient();
+
+    await client.searchScoped(
+      'test query',
+      canonicalTag,
+      [canonicalTag, legacyTag],
+      'personal',
+    );
+
+    assert.deepEqual(searchCalls, [
+      {
+        q: 'test query',
+        containerTag: canonicalTag,
+        limit: 10,
+        searchMode: 'hybrid',
+        filters: expectedFilters,
+      },
+      {
+        q: 'test query',
+        containerTag: legacyTag,
+        limit: 10,
+        searchMode: 'hybrid',
+      },
+    ]);
+  });
+
+  test('filters canonical scoped profiles by agent_scope only', async () => {
+    const { client, profileCalls } = createScopedClient();
+
+    await client.getProfileScoped(
+      canonicalTag,
+      [canonicalTag, legacyTag],
+      'personal',
+      'test query',
+    );
+
+    assert.deepEqual(profileCalls, [
+      {
+        containerTag: canonicalTag,
+        q: 'test query',
+        filters: expectedFilters,
+      },
+      { containerTag: legacyTag, q: 'test query' },
+    ]);
+  });
+
+  test('writes agent_scope metadata in every memory write path', () => {
+    const writePaths = [
+      ['../src/add-memory.js', "agent_scope: 'personal'"],
+      ['../src/summary-hook.js', "agent_scope: 'personal'"],
+      ['../src/save-project-memory.js', "agent_scope: 'project'"],
+    ];
+
+    for (const [path, expectedScope] of writePaths) {
+      const source = readFileSync(new URL(path, import.meta.url), 'utf-8');
+      assert.match(source, new RegExp(expectedScope));
+      assert.doesNotMatch(source, /sm_scope/);
+    }
   });
 });

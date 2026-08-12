@@ -24,12 +24,8 @@ function dedupe(items, getKey = (x) => x) {
 
 function getScopeFilters(scope) {
   return {
-    AND: [{ key: 'sm_scope', value: scope, filterType: 'metadata' }],
+    AND: [{ key: 'agent_scope', value: scope, filterType: 'metadata' }],
   };
-}
-
-function supportsScopedCanonicalTag(containerTag) {
-  return /^repo_.+__[0-9a-f]{16}$/i.test(containerTag);
 }
 
 const AGENT_ENTITY_CONTEXT = `Shared coding-agent memory for one software repository.
@@ -143,9 +139,7 @@ class SupermemoryClient {
     const legacyTags = [
       ...new Set(containerTags.filter((tag) => tag && tag !== canonicalTag)),
     ];
-    const canonicalOptions = supportsScopedCanonicalTag(canonicalTag)
-      ? { ...options, filters: getScopeFilters(scope) }
-      : options;
+    const canonicalOptions = { ...options, filters: getScopeFilters(scope) };
     const settled = await Promise.allSettled([
       this.search(query, canonicalTag, canonicalOptions),
       ...legacyTags.map((tag) => this.search(query, tag, options)),
@@ -233,9 +227,7 @@ class SupermemoryClient {
     const legacyTags = [
       ...new Set(containerTags.filter((tag) => tag && tag !== canonicalTag)),
     ];
-    const canonicalOptions = supportsScopedCanonicalTag(canonicalTag)
-      ? { ...options, filters: getScopeFilters(scope) }
-      : options;
+    const canonicalOptions = { ...options, filters: getScopeFilters(scope) };
     const settled = await Promise.allSettled([
       this.getProfile(canonicalTag, query, canonicalOptions),
       ...legacyTags.map((tag) => this.getProfile(tag, query)),

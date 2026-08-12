@@ -47,7 +47,7 @@ async function main() {
         type: 'project-knowledge',
         project: projectName,
         sm_project_id: getProjectIdentity(cwd),
-        sm_scope: 'project',
+        agent_scope: 'project',
         sm_capture_mode: 'explicit',
         timestamp: new Date().toISOString(),
       },

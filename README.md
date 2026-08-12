@@ -50,7 +50,7 @@ export SUPERMEMORY_CC_API_KEY="sm_..."
 Claude Code, Codex, and OpenCode use one container for a repository:
 
 - `repo_<project-name>__<remote-hash>` stores automatic capture and every explicit save.
-- `sm_scope` metadata keeps personal and project memories filterable inside that container.
+- `agent_scope` metadata keeps personal and project memories filterable inside that container.
 
 The hash is derived from the normalized Git remote, so clones share memory while
 same-named repositories do not collide. Repositories without a remote fall back to
@@ -63,6 +63,11 @@ remote identity.
 
 Explicit `repoContainerTag`/`projectContainerTag` overrides remain the canonical
 write destination. Older personal/user overrides remain in the legacy read set.
+
+> **Release dependency:** Release this plugin version only after the backend
+> `sm_scope` to `agent_scope` backfill has deployed and completed. Canonical
+> container reads filter only on `agent_scope`; legacy containers intentionally
+> remain unfiltered for backward compatibility.
 
 ## Commands
 
