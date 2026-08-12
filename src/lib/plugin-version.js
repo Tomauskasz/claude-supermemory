@@ -1,3 +1,3 @@
-const PLUGIN_VERSION = '0.0.14';
+const PLUGIN_VERSION = '0.0.15';
 
 module.exports = { PLUGIN_VERSION };
