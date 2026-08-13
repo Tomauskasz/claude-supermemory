@@ -6,6 +6,8 @@ const {
 } = require('./validate.js');
 const { BASE_URL } = require('./constants');
 const {
+  extractResultText,
+  searchResultKey,
   mergeSearchResponses,
   mergeProfileResponses,
 } = require('./result-merge');
@@ -107,7 +109,7 @@ class SupermemoryClient {
     const result = await this.client.search.memories(payload);
     const mapped = result.results.map((r) => ({
       id: r.id,
-      memory: r.content || r.memory || r.context || '',
+      memory: extractResultText(r),
       chunk: r.chunk,
       metadata: r.metadata,
       updatedAt: r.updatedAt,
@@ -115,7 +117,7 @@ class SupermemoryClient {
       containerTag: containerTag || this.containerTag,
     }));
     return {
-      results: dedupe(mapped, (r) => r.memory),
+      results: dedupe(mapped, searchResultKey),
       total: result.total,
       timing: result.timing,
     };
@@ -181,20 +183,27 @@ class SupermemoryClient {
         return true;
       });
 
-    const staticFacts = dedupeWithSeen(result.profile?.static || []);
-    const dynamicFacts = dedupeWithSeen(result.profile?.dynamic || []);
+    const profileFactKey = (fact) => searchResultKey({ memory: fact });
+    const staticFacts = dedupeWithSeen(
+      result.profile?.static || [],
+      profileFactKey,
+    );
+    const dynamicFacts = dedupeWithSeen(
+      result.profile?.dynamic || [],
+      profileFactKey,
+    );
 
     let searchResults;
     if (result.searchResults) {
       const mapped = result.searchResults.results.map((r) => ({
         id: r.id,
-        memory: r.content || r.context || '',
+        memory: extractResultText(r),
         similarity: r.similarity,
         title: r.title,
         updatedAt: r.updatedAt,
       }));
       searchResults = {
-        results: dedupeWithSeen(mapped, (r) => r.memory),
+        results: dedupeWithSeen(mapped, searchResultKey),
         total: result.searchResults.total,
         timing: result.searchResults.timing,
       };

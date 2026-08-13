@@ -14,10 +14,26 @@ function dedupe(items, getKey = (item) => item) {
   });
 }
 
+function extractResultText(result) {
+  const candidates = [
+    result?.memory,
+    result?.chunk,
+    result?.content,
+    result?.context,
+  ];
+  return (
+    candidates.find(
+      (candidate) =>
+        typeof candidate === 'string' && candidate.trim().length > 0,
+    ) || ''
+  );
+}
+
 function searchResultKey(result) {
-  const content = normalizedKey(result.memory);
+  const content = normalizedKey(extractResultText(result));
   if (content) return `content:${content}`;
-  return result.id ? `id:${result.id}` : '';
+  const id = normalizedKey(result?.id);
+  return id ? `id:${id}` : '';
 }
 
 function compareSearchResults(a, b) {
@@ -61,4 +77,9 @@ function mergeProfileResponses(responses, limit = 10) {
   };
 }
 
-module.exports = { mergeSearchResponses, mergeProfileResponses };
+module.exports = {
+  extractResultText,
+  searchResultKey,
+  mergeSearchResponses,
+  mergeProfileResponses,
+};
