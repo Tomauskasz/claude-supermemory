@@ -1,8 +1,8 @@
 const { loadSettings, debugLog } = require('./lib/settings');
 const { readStdin, writeOutput } = require('./lib/stdin');
 
-const SEARCH_BASH_RE = /node[\s\S]*search-memory\.cjs/;
-const SHELL_OPS = /[;&|`>]|\$\(/;
+const SEARCH_BASH_RE =
+  /^node\s+"?(?:[^"\n$`]|\$(?!\())*search-memory\.cjs"?\s+(?:--(?:user|repo|both)\s+)?"(?:[^"\n$`]|\$(?!\())*"\s*$/;
 const SEARCH_SKILL = 'supermemory-search';
 
 function isSupermemorySearch(toolName, toolInput) {
@@ -11,7 +11,7 @@ function isSupermemorySearch(toolName, toolInput) {
   }
   if (toolName === 'Bash') {
     const cmd = String(toolInput?.command || '');
-    return SEARCH_BASH_RE.test(cmd) && !SHELL_OPS.test(cmd);
+    return SEARCH_BASH_RE.test(cmd);
   }
   return false;
 }
