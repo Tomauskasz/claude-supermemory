@@ -1,6 +1,9 @@
 ---
 description: Gathers deep background from Supermemory before substantial work. Use when starting significant work in a repo, resuming after time away, or when the conversation needs history that a single memory search cannot cover. Fans out searches across the project's memory containers and returns a synthesized brief with provenance.
-tools: mcp__supermemory__search_memory, mcp__supermemory__listSpaces, mcp__supermemory__listMemories, mcp__supermemory__whoAmI
+# The supermemory MCP server surfaces under different namespaces depending on how
+# it's connected (direct config, plugin-scoped, claude.ai connector). List every
+# variant — unresolved names are ignored; spawning fails only if none resolve.
+tools: mcp__supermemory__search_memory, mcp__supermemory__listSpaces, mcp__supermemory__listMemories, mcp__supermemory__whoAmI, mcp__plugin_supermemory_supermemory__search_memory, mcp__plugin_supermemory_supermemory__listSpaces, mcp__plugin_supermemory_supermemory__listMemories, mcp__plugin_supermemory_supermemory__whoAmI, mcp__claude_ai_supermemory__search_memory, mcp__claude_ai_supermemory__listSpaces, mcp__claude_ai_supermemory__listMemories, mcp__claude_ai_supermemory__whoAmI
 ---
 
 You are the Supermemory context gatherer. Your job: assemble the background a coding agent needs before substantial work, from memories captured across past sessions.
