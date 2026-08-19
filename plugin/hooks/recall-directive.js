@@ -2,7 +2,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { getProfile } = require('./lib/api');
+const { getProfile, scopeFilters } = require('./lib/api');
 const { BRAND, gray, red } = require('./lib/colors');
 const { getContainerTag } = require('./lib/container-tag');
 const { loadProjectConfig } = require('./lib/project-config');
@@ -125,7 +125,7 @@ async function main() {
       apiKey,
       containerTag,
       prompt.slice(0, MAX_QUERY_LENGTH),
-      { timeoutMs: SEARCH_TIMEOUT_MS },
+      { timeoutMs: SEARCH_TIMEOUT_MS, filters: scopeFilters('personal') },
     );
 
     const results = (response?.searchResults?.results || [])

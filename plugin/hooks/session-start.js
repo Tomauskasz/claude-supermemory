@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { getProfile } = require('./lib/api');
+const { getProfile, scopeFilters } = require('./lib/api');
 const { getContainerTag, getProjectName } = require('./lib/container-tag');
 const { loadProjectConfig } = require('./lib/project-config');
 const {
@@ -174,7 +174,9 @@ Or set the SUPERMEMORY_CC_API_KEY environment variable.
     let profileResult = null;
     let apiError = null;
     try {
-      profileResult = await getProfile(baseUrl, apiKey, containerTag, projectName);
+      profileResult = await getProfile(baseUrl, apiKey, containerTag, projectName, {
+        filters: scopeFilters('personal'),
+      });
     } catch (err) {
       if (!isBenignError(err)) apiError = getUserFriendlyError(err);
       debugLog(settings, 'Profile fetch failed', { error: err.message });

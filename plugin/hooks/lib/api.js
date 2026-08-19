@@ -40,8 +40,17 @@ async function post(baseUrl, apiKey, path, body, timeoutMs = 15000) {
   return response.json();
 }
 
+// Canonical-container reads filter on searchable agent_scope metadata; legacy
+// containers stay unfiltered. Requires the backend sm_scope→agent_scope
+// backfill (mono#2895) to be deployed, or filtered reads return nothing.
+function scopeFilters(scope) {
+  return { AND: [{ key: 'agent_scope', value: scope, filterType: 'metadata' }] };
+}
+
 function getProfile(baseUrl, apiKey, containerTag, query, options = {}) {
-  return post(baseUrl, apiKey, '/v4/profile', { containerTag, q: query }, options.timeoutMs);
+  const body = { containerTag, q: query };
+  if (options.filters) body.filters = options.filters;
+  return post(baseUrl, apiKey, '/v4/profile', body, options.timeoutMs);
 }
 
 function addMemory(baseUrl, apiKey, content, containerTag, metadata, options = {}) {
@@ -55,4 +64,4 @@ function addMemory(baseUrl, apiKey, content, containerTag, metadata, options = {
   return post(baseUrl, apiKey, '/v3/documents', body, options.timeoutMs);
 }
 
-module.exports = { AGENT_ENTITY_CONTEXT, getProfile, addMemory };
+module.exports = { AGENT_ENTITY_CONTEXT, getProfile, addMemory, scopeFilters };

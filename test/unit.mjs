@@ -210,6 +210,9 @@ describe('recall-directive hook', () => {
       JSON.parse(stub.requests[0].body).q,
       'continue the database work from before',
     );
+    assert.deepEqual(JSON.parse(stub.requests[0].body).filters, {
+      AND: [{ key: 'agent_scope', value: 'personal', filterType: 'metadata' }],
+    });
 
     const state = readState('s1', {
       dataDir: join(home, '.supermemory-claude', 'statusline'),
@@ -388,6 +391,9 @@ describe('session-start hook', () => {
     assert.match(plain(output.systemMessage), /◪ supermemory · 2 memories loaded for Example\.Project/);
     assert.equal(stub.requests[0].url, '/v4/profile');
     assert.match(stub.requests[0].headers.authorization, /^Bearer sm_test/);
+    assert.deepEqual(JSON.parse(stub.requests[0].body).filters, {
+      AND: [{ key: 'agent_scope', value: 'personal', filterType: 'metadata' }],
+    });
 
     const state = readState('sess-1', {
       dataDir: join(home, '.supermemory-claude', 'statusline'),
@@ -440,7 +446,8 @@ describe('capture hook', () => {
     const body = JSON.parse(stub.requests[0].body);
     assert.match(body.content, /statusline symlink/);
     assert.match(body.containerTag, /^repo_example_project__/);
-    assert.equal(body.metadata.sm_scope, 'personal');
+    assert.equal(body.metadata.agent_scope, 'personal');
+    assert.equal('sm_scope' in body.metadata, false);
     assert.equal(body.customId, 'sess-2');
     assert.match(body.entityContext, /EXTRACT/);
 

@@ -67,7 +67,7 @@ async function main() {
         type: 'session_turn',
         project: getProjectName(cwd),
         sm_project_id: getProjectIdentity(cwd),
-        sm_scope: 'personal',
+        agent_scope: 'personal',
         sm_capture_mode: 'automatic',
         timestamp: new Date().toISOString(),
       },
