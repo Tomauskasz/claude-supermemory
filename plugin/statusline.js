@@ -26,6 +26,33 @@ const WHITE = '\x1b[97m';
 const BOLD = '\x1b[1m';
 const RESET = '\x1b[0m';
 
+// Animation engine. Claude Code re-runs this script on activity and, with
+// statusLine.refreshInterval set, on an idle timer — there is no persistent
+// process, so every frame must be a pure function of (state, now). The idle
+// floor is one render per second, so frames are choreographed as big distinct
+// poses: the shimmer crest jumps 3 letters and the spinner 3 steps per tick
+// (both strides coprime with their cycle lengths, so every pose is visited).
+// During activity Claude Code renders every ~300ms and the same math plays
+// back smoothly at that rate.
+const TICK_MS = 1000;
+const EMPHASIS_TICKS = 2;
+const CREST_STRIDE = 3;
+const SPINNER_STRIDE = 3;
+const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const SHIMMER_HI = '\x1b[38;2;200;198;255m';
+const SHIMMER_MID = '\x1b[38;2;120;115;250m';
+const GRAY = '\x1b[38;5;245m';
+
+function shimmer(word, tick) {
+  const crest = (tick * CREST_STRIDE) % word.length;
+  let out = '';
+  for (let i = 0; i < word.length; i++) {
+    const d = Math.abs(i - crest);
+    out += (d === 0 ? SHIMMER_HI : d <= 2 ? SHIMMER_MID : BLUE) + word[i];
+  }
+  return out + RESET;
+}
+
 function readEvent(sessionDir, event) {
   try {
     const record = JSON.parse(
@@ -66,10 +93,10 @@ function isFresh(record, ttl, now, contextUpdatedAt = 0) {
   );
 }
 
-// Resting label is a live session tally — the captured count ticks up on
+// Resting status is a live session tally — the captured count ticks up on
 // every turn and recalls on every search, so the line is always moving.
 // Transient states (saving, errors) briefly take over.
-function getStatusLabel(state, now = Date.now()) {
+function getStatus(state, now) {
   const { context, capture, search } = state;
   const generation = Number.isFinite(context?.updatedAt) ? context.updatedAt : 0;
 
@@ -77,13 +104,13 @@ function getStatusLabel(state, now = Date.now()) {
     capture?.status === 'saving' &&
     isFresh(capture, SAVING_TTL_MS, now, generation)
   ) {
-    return 'saving session';
+    return { kind: 'saving' };
   }
   if (
     capture?.status === 'error' &&
     isFresh(capture, ERROR_TTL_MS, now, generation)
   ) {
-    return 'session sync failed';
+    return { kind: 'error' };
   }
 
   const contextReady =
@@ -99,15 +126,46 @@ function getStatusLabel(state, now = Date.now()) {
     parts.push(`${search.count} ${search.count === 1 ? 'recall' : 'recalls'}`);
   }
 
-  if (parts.length > 0) return parts.join(' · ');
-  return contextReady ? 'ready' : null;
+  if (parts.length > 0) return { kind: 'tally', parts };
+  return contextReady ? { kind: 'ready' } : null;
+}
+
+function getStatusLabel(state, now = Date.now()) {
+  const status = getStatus(state, now);
+  if (!status) return null;
+  if (status.kind === 'saving') return 'saving session';
+  if (status.kind === 'error') return 'session sync failed';
+  if (status.kind === 'ready') return 'ready';
+  return status.parts.join(' · ');
 }
 
 function renderStatusline(state, options = {}) {
-  const label = getStatusLabel(state, options.now);
-  if (!label) return '';
-  if (options.color === false) return `◆ supermemory · ${label}`;
-  return `${BLUE}${BOLD}◆ supermemory${RESET} ${WHITE}· ${label}${RESET}`;
+  const now = options.now ?? Date.now();
+  const status = getStatus(state, now);
+  if (!status) return '';
+  if (options.color === false) {
+    return `◪ supermemory · ${getStatusLabel(state, now)}`;
+  }
+
+  const tick = Math.floor(now / TICK_MS);
+  const brand = `${BLUE}${BOLD}◪${RESET} ${BOLD}${shimmer('supermemory', tick)}${RESET}`;
+
+  if (status.kind === 'saving') {
+    const spin = SPINNER[(tick * SPINNER_STRIDE) % SPINNER.length];
+    return `${brand} ${BLUE}${spin}${RESET} ${WHITE}saving session${RESET}`;
+  }
+  if (status.kind === 'error') {
+    return `${brand} ${WHITE}· session sync failed${RESET}`;
+  }
+  if (status.kind === 'ready') {
+    return `${brand} ${WHITE}· ready${RESET}`;
+  }
+
+  const emphasized = Math.floor(tick / EMPHASIS_TICKS) % status.parts.length;
+  const parts = status.parts.map((part, i) =>
+    i === emphasized ? `${WHITE}${BOLD}${part}${RESET}` : `${GRAY}${part}${RESET}`,
+  );
+  return `${brand} ${WHITE}·${RESET} ${parts.join(`${GRAY} · ${RESET}`)}`;
 }
 
 function readStatuslineInput(input = process.stdin, options = {}) {
@@ -199,6 +257,7 @@ module.exports = {
   ERROR_TTL_MS,
   SAVING_TTL_MS,
   STATUSLINE_INPUT_TIMEOUT_MS,
+  TICK_MS,
   getStatusLabel,
   readState,
   readStatuslineInput,

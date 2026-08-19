@@ -28,6 +28,7 @@ const {
 const {
   ERROR_TTL_MS,
   SAVING_TTL_MS,
+  TICK_MS,
   getStatusLabel,
   renderStatusline,
 } = require('../plugin/statusline.js');
@@ -175,7 +176,7 @@ describe('recall-directive hook', () => {
     assert.match(context, /<supermemory-recall>/);
     assert.match(context, /search_memory/);
     assert.match(context, /repo_example_project__/);
-    assert.match(context, /◆ from memory/);
+    assert.match(context, /◪ last week you told me/);
   });
 });
 
@@ -197,7 +198,7 @@ describe('recall-approve hook', () => {
       );
       const output = JSON.parse(stdout);
       assert.equal(output.hookSpecificOutput.permissionDecision, 'allow');
-      assert.equal(output.systemMessage, '◆ supermemory · recalling: auth flow decisions');
+      assert.equal(output.systemMessage, '◪ supermemory · recalling: auth flow decisions');
     }
   });
 
@@ -242,7 +243,7 @@ describe('session-start hook', () => {
     const output = JSON.parse(stdout);
     assert.match(output.hookSpecificOutput.additionalContext, /Uses Bun/);
     assert.match(output.hookSpecificOutput.additionalContext, /Working on statusline/);
-    assert.match(output.systemMessage, /◆ supermemory · 2 memories loaded for Example\.Project/);
+    assert.match(output.systemMessage, /◪ supermemory · 2 memories loaded for Example\.Project/);
     assert.equal(stub.requests[0].url, '/v4/profile');
     assert.match(stub.requests[0].headers.authorization, /^Bearer sm_test/);
 
@@ -501,7 +502,7 @@ describe('statusline rendering', () => {
     );
     assert.equal(
       renderStatusline({ context }, { now, color: false }),
-      '◆ supermemory · 3 loaded',
+      '◪ supermemory · 3 loaded',
     );
   });
 
@@ -534,6 +535,39 @@ describe('statusline rendering', () => {
       ),
       '3 loaded · 7 captured',
     );
+  });
+
+  test('animates: no frame repeats within any 10s window', () => {
+    const states = {
+      saving: { context, capture: { status: 'saving', count: 2, updatedAt: now } },
+      tally: {
+        context,
+        capture: { status: 'saved', count: 7, updatedAt: now + 10 },
+        search: { results: 4, count: 2, updatedAt: now + 12 },
+      },
+      ready: { context: { ...context, memoryItemsLoaded: 0 } },
+    };
+    for (const [name, state] of Object.entries(states)) {
+      const frames = Array.from({ length: 10 }, (_, i) =>
+        renderStatusline(state, { now: now + 20 + i * TICK_MS }),
+      );
+      assert.equal(new Set(frames).size, frames.length, `${name} frames repeat`);
+    }
+  });
+
+  test('animation never changes the plain-text label', () => {
+    const state = {
+      context,
+      capture: { status: 'saved', count: 7, updatedAt: now + 10 },
+    };
+    for (let i = 0; i < 15; i++) {
+      const t = now + 20 + i * TICK_MS;
+      assert.equal(getStatusLabel(state, t), '3 loaded · 7 captured');
+      assert.equal(
+        renderStatusline(state, { now: t, color: false }),
+        '◪ supermemory · 3 loaded · 7 captured',
+      );
+    }
   });
 
   test('suppresses counts from before the current session context', () => {
