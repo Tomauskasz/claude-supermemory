@@ -451,9 +451,9 @@ function formatSignalEntries(transcriptPath, sessionId, cwd) {
 
   if (result.length < 100) return null;
 
-  setLastCapturedUuid(sessionId, lastEntry.uuid);
-
-  return result;
+  // The caller advances the cursor only after the save succeeds — advancing
+  // here would silently drop this delta whenever the API call fails.
+  return { formatted: result, lastUuid: lastEntry.uuid };
 }
 
 function formatNewEntries(transcriptPath, sessionId, cwd) {
@@ -489,9 +489,9 @@ function formatNewEntries(transcriptPath, sessionId, cwd) {
 
   if (result.length < 100) return null;
 
-  setLastCapturedUuid(sessionId, lastEntry.uuid);
-
-  return result;
+  // The caller advances the cursor only after the save succeeds — advancing
+  // here would silently drop this delta whenever the API call fails.
+  return { formatted: result, lastUuid: lastEntry.uuid };
 }
 
 module.exports = {

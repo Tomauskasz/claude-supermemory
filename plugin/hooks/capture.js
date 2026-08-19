@@ -13,7 +13,11 @@ const {
   getSignalConfig,
 } = require('./lib/settings');
 const { readStdin, writeOutput } = require('./lib/stdin');
-const { formatNewEntries, formatSignalEntries } = require('./lib/transcript');
+const {
+  formatNewEntries,
+  formatSignalEntries,
+  setLastCapturedUuid,
+} = require('./lib/transcript');
 const { getUserFriendlyError } = require('./lib/error-helpers');
 const { saveLastSession } = require('./lib/last-session');
 const { readState, writeState } = require('./lib/statusline-state');
@@ -42,11 +46,11 @@ async function main() {
       return;
     }
 
-    const formatted = getSignalConfig(cwd).enabled
+    const delta = getSignalConfig(cwd).enabled
       ? formatSignalEntries(transcriptPath, sessionId, cwd)
       : formatNewEntries(transcriptPath, sessionId, cwd);
 
-    if (!formatted) {
+    if (!delta) {
       debugLog(settings, 'No new content to save');
       writeOutput({ continue: true });
       return;
@@ -61,7 +65,7 @@ async function main() {
     const result = await addMemory(
       baseUrl,
       apiKey,
-      formatted,
+      delta.formatted,
       containerTag,
       {
         type: 'session_turn',
@@ -74,6 +78,7 @@ async function main() {
       { customId: sessionId, entityContext: AGENT_ENTITY_CONTEXT },
     );
 
+    setLastCapturedUuid(sessionId, delta.lastUuid);
     writeState(sessionId, 'capture', { status: 'saved', count: captured + 1 });
 
     if (result?.id) {
@@ -82,7 +87,7 @@ async function main() {
       } catch {}
     }
 
-    debugLog(settings, 'Session turn saved', { length: formatted.length });
+    debugLog(settings, 'Session turn saved', { length: delta.formatted.length });
     writeOutput({ continue: true });
   } catch (err) {
     const friendly = getUserFriendlyError(err);

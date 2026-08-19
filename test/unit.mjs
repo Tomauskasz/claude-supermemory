@@ -451,6 +451,47 @@ describe('capture hook', () => {
     });
     assert.equal(state.capture.status, 'saved');
   });
+
+  test('a failed save does not advance the cursor; the retry recaptures (issue #96)', async (t) => {
+    const { repo, home } = makeRepo(t);
+    mkdirSync(join(home, '.supermemory-claude'), { recursive: true });
+    writeFileSync(
+      join(home, '.supermemory-claude', 'credentials.json'),
+      JSON.stringify({ apiKey: 'sm_test_key_0123456789abcdef' }),
+    );
+    const transcript = join(makeTempDir(t, 'transcript-retry'), 'session.jsonl');
+    writeFileSync(
+      transcript,
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        timestamp: '2026-08-18T20:00:00Z',
+        message: { content: 'Remember: we chose Drizzle over Prisma for performance' },
+      }),
+    );
+    let failing = true;
+    const stub = await startStubServer(t, (record, res) => {
+      res.statusCode = failing ? 500 : 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify(failing ? { error: 'boom' } : { id: 'doc_9' }));
+    });
+    const env = { HOME: home, USERPROFILE: home, SUPERMEMORY_API_URL: stub.url };
+    const input = { session_id: 'sess-retry', cwd: repo, transcript_path: transcript };
+
+    await runHook('capture.js', input, env);
+    const dataDir = join(home, '.supermemory-claude', 'statusline');
+    assert.equal(readState('sess-retry', { dataDir }).capture.status, 'error');
+
+    failing = false;
+    await runHook('capture.js', input, env);
+    assert.equal(stub.requests.length, 2);
+    assert.match(JSON.parse(stub.requests[1].body).content, /Drizzle over Prisma/);
+    assert.equal(readState('sess-retry', { dataDir }).capture.status, 'saved');
+
+    // Cursor advanced after success: a third run finds nothing new.
+    await runHook('capture.js', input, env);
+    assert.equal(stub.requests.length, 2);
+  });
 });
 
 describe('mcp proxy', () => {
