@@ -21,7 +21,9 @@ const ERROR_TTL_MS = 60 * 1000;
 const CONTEXT_TTL_MS = 24 * 60 * 60 * 1000;
 const STATUSLINE_INPUT_TIMEOUT_MS = 500;
 
-const BLUE = '\x1b[38;2;59;53;243m';
+// Mid-luminance tint of the brand blue (#3B35F3): terminals can't report
+// their theme, so the palette must clear both dark and light backgrounds.
+const BLUE = '\x1b[38;2;124;120;250m';
 const WHITE = '\x1b[97m';
 const BOLD = '\x1b[1m';
 const RESET = '\x1b[0m';
@@ -40,8 +42,8 @@ const PANE_TICKS = 4;
 const CREST_STRIDE = 3;
 const SPINNER_STRIDE = 3;
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const SHIMMER_HI = '\x1b[38;2;200;198;255m';
-const SHIMMER_MID = '\x1b[38;2;120;115;250m';
+const SHIMMER_HI = '\x1b[38;2;224;223;255m';
+const SHIMMER_MID = '\x1b[38;2;170;167;255m';
 const GRAY = '\x1b[38;5;245m';
 
 function formatAge(ms) {
