@@ -1,5 +1,5 @@
 const { loadSettings, debugLog } = require('./lib/settings');
-const { writeState } = require('./lib/statusline-state');
+const { readState, writeState } = require('./lib/statusline-state');
 const { readStdin, writeOutput } = require('./lib/stdin');
 
 // Plugin MCP tool names arrive as mcp__supermemory__<tool> (direct config) or
@@ -31,7 +31,8 @@ async function main() {
           ? input.tool_input.query
           : null;
       if (tool === 'search_memory') {
-        writeState(input.session_id, 'search', { results: 0 });
+        const recalls = readState(input.session_id).search?.count || 0;
+        writeState(input.session_id, 'search', { results: 0, count: recalls + 1 });
       }
       writeOutput({
         systemMessage: query

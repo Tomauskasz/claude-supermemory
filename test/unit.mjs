@@ -26,9 +26,8 @@ const {
   writeState,
 } = require('../plugin/hooks/lib/statusline-state.js');
 const {
-  CAPTURE_TTL_MS,
+  ERROR_TTL_MS,
   SAVING_TTL_MS,
-  SEARCH_TTL_MS,
   getStatusLabel,
   renderStatusline,
 } = require('../plugin/statusline.js');
@@ -473,69 +472,86 @@ describe('statusline rendering', () => {
     updatedAt: now,
   };
 
-  test('uses deterministic factual priority and labels', () => {
-    assert.equal(getStatusLabel({ context }, now), '3 memory items loaded');
+  test('rests on a live session tally that grows with activity', () => {
+    assert.equal(getStatusLabel({ context }, now), '3 loaded');
     assert.equal(
-      getStatusLabel({ context, search: { results: 1, updatedAt: now + 10 } }, now + 20),
-      '1 search result',
+      getStatusLabel(
+        { context, capture: { status: 'saved', count: 7, updatedAt: now + 10 } },
+        now + 20,
+      ),
+      '3 loaded · 7 captured',
     );
     assert.equal(
       getStatusLabel(
         {
           context,
-          search: { results: 2, updatedAt: now + 10 },
-          capture: { status: 'saved', updatedAt: now + 15 },
+          capture: { status: 'saved', count: 7, updatedAt: now + 10 },
+          search: { results: 4, count: 2, updatedAt: now + 12 },
         },
         now + 20,
       ),
-      'session captured',
+      '3 loaded · 7 captured · 2 recalls',
     );
     assert.equal(
-      getStatusLabel({ context, capture: { status: 'saving', updatedAt: now + 15 } }, now + 20),
-      'saving session',
+      getStatusLabel(
+        { context, search: { results: 4, count: 1, updatedAt: now + 12 } },
+        now + 20,
+      ),
+      '3 loaded · 1 recall',
     );
     assert.equal(
       renderStatusline({ context }, { now, color: false }),
-      '◆ supermemory · 3 memory items loaded',
+      '◆ supermemory · 3 loaded',
     );
   });
 
-  test('suppresses stale and pre-session events', () => {
+  test('transient states briefly take over the tally', () => {
+    assert.equal(
+      getStatusLabel(
+        { context, capture: { status: 'saving', count: 7, updatedAt: now + 15 } },
+        now + 20,
+      ),
+      'saving session',
+    );
+    assert.equal(
+      getStatusLabel(
+        { context, capture: { status: 'saving', count: 7, updatedAt: now + 15 } },
+        now + 15 + SAVING_TTL_MS,
+      ),
+      '3 loaded · 7 captured',
+    );
+    assert.equal(
+      getStatusLabel(
+        { context, capture: { status: 'error', count: 7, updatedAt: now + 15 } },
+        now + 20,
+      ),
+      'session sync failed',
+    );
+    assert.equal(
+      getStatusLabel(
+        { context, capture: { status: 'error', count: 7, updatedAt: now + 15 } },
+        now + 15 + ERROR_TTL_MS,
+      ),
+      '3 loaded · 7 captured',
+    );
+  });
+
+  test('suppresses counts from before the current session context', () => {
     assert.equal(
       getStatusLabel(
         {
           context,
-          capture: { status: 'saving', updatedAt: now - SAVING_TTL_MS },
-          search: { results: 4, updatedAt: now - SEARCH_TTL_MS },
+          capture: { status: 'saved', count: 9, updatedAt: now - 1 },
+          search: { results: 1, count: 3, updatedAt: now - 1 },
         },
-        now,
+        now + 10,
       ),
-      '3 memory items loaded',
-    );
-    assert.equal(
-      getStatusLabel(
-        { context, capture: { status: 'saved', updatedAt: now - CAPTURE_TTL_MS } },
-        now,
-      ),
-      '3 memory items loaded',
-    );
-    assert.equal(
-      getStatusLabel({ context, search: { results: 4, updatedAt: now - 1 } }, now),
-      '3 memory items loaded',
+      '3 loaded',
     );
     assert.equal(getStatusLabel({ context: { ...context, status: 'error' } }, now), null);
-  });
-
-  test('shows fresh activity even when context is stale or failed', () => {
     assert.equal(
-      getStatusLabel(
-        {
-          context: { ...context, status: 'error' },
-          search: { results: 4, updatedAt: now + 1 },
-        },
-        now + 2,
-      ),
-      '4 search results',
+      getStatusLabel({ context: { ...context, memoryItemsLoaded: 0 } }, now),
+      'ready',
     );
   });
 });

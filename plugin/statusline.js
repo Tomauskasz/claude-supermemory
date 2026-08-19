@@ -17,8 +17,7 @@ const STATE_ROOT = path.join(
 const SCHEMA_VERSION = 1;
 
 const SAVING_TTL_MS = 30 * 1000;
-const CAPTURE_TTL_MS = 2 * 60 * 1000;
-const SEARCH_TTL_MS = 60 * 1000;
+const ERROR_TTL_MS = 60 * 1000;
 const CONTEXT_TTL_MS = 24 * 60 * 60 * 1000;
 const STATUSLINE_INPUT_TIMEOUT_MS = 500;
 
@@ -67,11 +66,12 @@ function isFresh(record, ttl, now, contextUpdatedAt = 0) {
   );
 }
 
+// Resting label is a live session tally — the captured count ticks up on
+// every turn and recalls on every search, so the line is always moving.
+// Transient states (saving, errors) briefly take over.
 function getStatusLabel(state, now = Date.now()) {
-  const context = state.context;
+  const { context, capture, search } = state;
   const generation = Number.isFinite(context?.updatedAt) ? context.updatedAt : 0;
-  const capture = state.capture;
-  const search = state.search;
 
   if (
     capture?.status === 'saving' &&
@@ -80,27 +80,27 @@ function getStatusLabel(state, now = Date.now()) {
     return 'saving session';
   }
   if (
-    capture?.status === 'saved' &&
-    isFresh(capture, CAPTURE_TTL_MS, now, generation)
-  ) {
-    return 'session captured';
-  }
-  if (
     capture?.status === 'error' &&
-    isFresh(capture, SEARCH_TTL_MS, now, generation)
+    isFresh(capture, ERROR_TTL_MS, now, generation)
   ) {
     return 'session sync failed';
   }
-  if (isFresh(search, SEARCH_TTL_MS, now, generation)) {
-    const count = search.results || 0;
-    return `${count} search ${count === 1 ? 'result' : 'results'}`;
+
+  const contextReady =
+    isFresh(context, CONTEXT_TTL_MS, now) && context.status === 'ready';
+  const parts = [];
+  if (contextReady && context.memoryItemsLoaded > 0) {
+    parts.push(`${context.memoryItemsLoaded} loaded`);
+  }
+  if (capture?.count > 0 && capture.updatedAt >= generation) {
+    parts.push(`${capture.count} captured`);
+  }
+  if (search?.count > 0 && search.updatedAt >= generation) {
+    parts.push(`${search.count} ${search.count === 1 ? 'recall' : 'recalls'}`);
   }
 
-  if (!isFresh(context, CONTEXT_TTL_MS, now)) return null;
-  if (context.status !== 'ready') return null;
-  const count = context.memoryItemsLoaded || 0;
-  if (count === 0) return 'ready';
-  return `${count} memory ${count === 1 ? 'item' : 'items'} loaded`;
+  if (parts.length > 0) return parts.join(' · ');
+  return contextReady ? 'ready' : null;
 }
 
 function renderStatusline(state, options = {}) {
@@ -195,10 +195,9 @@ if (require.main === module) {
 }
 
 module.exports = {
-  CAPTURE_TTL_MS,
   CONTEXT_TTL_MS,
+  ERROR_TTL_MS,
   SAVING_TTL_MS,
-  SEARCH_TTL_MS,
   STATUSLINE_INPUT_TIMEOUT_MS,
   getStatusLabel,
   readState,

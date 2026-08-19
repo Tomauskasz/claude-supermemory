@@ -16,7 +16,7 @@ const { readStdin, writeOutput } = require('./lib/stdin');
 const { formatNewEntries, formatSignalEntries } = require('./lib/transcript');
 const { getUserFriendlyError } = require('./lib/error-helpers');
 const { saveLastSession } = require('./lib/last-session');
-const { writeState } = require('./lib/statusline-state');
+const { readState, writeState } = require('./lib/statusline-state');
 
 async function main() {
   const settings = loadSettings();
@@ -55,7 +55,8 @@ async function main() {
     const baseUrl = getBaseUrl(cwd, projectConfig);
     const containerTag = getContainerTag(cwd);
 
-    writeState(sessionId, 'capture', { status: 'saving' });
+    const captured = readState(sessionId).capture?.count || 0;
+    writeState(sessionId, 'capture', { status: 'saving', count: captured });
 
     const result = await addMemory(
       baseUrl,
@@ -73,7 +74,7 @@ async function main() {
       { customId: sessionId, entityContext: AGENT_ENTITY_CONTEXT },
     );
 
-    writeState(sessionId, 'capture', { status: 'saved' });
+    writeState(sessionId, 'capture', { status: 'saved', count: captured + 1 });
 
     if (result?.id) {
       try {

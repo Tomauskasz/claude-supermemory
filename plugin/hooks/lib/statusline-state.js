@@ -86,10 +86,10 @@ function sanitizeEvent(event, data) {
     const status = ['saving', 'saved', 'error'].includes(data.status)
       ? data.status
       : 'error';
-    return { status };
+    return { status, count: normalizeCount(data.count) };
   }
 
-  return { results: normalizeCount(data.results) };
+  return { results: normalizeCount(data.results), count: normalizeCount(data.count) };
 }
 
 function writeState(sessionId, event, data = {}, options = {}) {

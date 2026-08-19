@@ -62,6 +62,23 @@ function statuslineTip() {
   }
 }
 
+const MARK_TIP_FILE = path.join(
+  os.homedir(),
+  '.supermemory-claude',
+  'mark-tip-shown',
+);
+
+function markTip() {
+  try {
+    if (fs.existsSync(MARK_TIP_FILE)) return null;
+    fs.mkdirSync(path.dirname(MARK_TIP_FILE), { recursive: true });
+    fs.writeFileSync(MARK_TIP_FILE, new Date().toISOString());
+    return '◆ is the supermemory mark — whenever you see it (statusline, notices, Claude\'s answers), that information came from your memory.';
+  } catch {
+    return null;
+  }
+}
+
 function welcomeBackNotice(containerTag) {
   try {
     const last = JSON.parse(fs.readFileSync(LAST_SESSION_FILE, 'utf-8'));
@@ -207,6 +224,7 @@ Memories will be saved as you work.
         [memoryNotice, welcomeBackNotice(containerTag)]
           .filter(Boolean)
           .join(' · ') || null,
+        markTip(),
         statuslineTip(),
       ],
     );
