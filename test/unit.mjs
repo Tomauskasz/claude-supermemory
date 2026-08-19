@@ -555,6 +555,21 @@ describe('statusline rendering', () => {
     }
   });
 
+  test('rotates real content panes: tally, save age, recall age', () => {
+    const state = {
+      context,
+      capture: { status: 'saved', count: 7, updatedAt: now + 10 },
+      search: { results: 4, count: 2, updatedAt: now + 12 },
+    };
+    const plain = (s) => s.replace(/\x1b(\[[0-9;]*m|\]8;;[^\x07]*\x07)/g, '');
+    const frames = Array.from({ length: 12 }, (_, i) =>
+      plain(renderStatusline(state, { now: now + 60_000 + i * TICK_MS })),
+    );
+    assert.ok(frames.some((f) => f.includes('7 captured')), 'tally pane missing');
+    assert.ok(frames.some((f) => /saved \d+[smh] ago/.test(f)), 'save age pane missing');
+    assert.ok(frames.some((f) => /recalled \d+[smh] ago/.test(f)), 'recall age pane missing');
+  });
+
   test('animation never changes the plain-text label', () => {
     const state = {
       context,

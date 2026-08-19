@@ -36,12 +36,20 @@ const RESET = '\x1b[0m';
 // back smoothly at that rate.
 const TICK_MS = 1000;
 const EMPHASIS_TICKS = 2;
+const PANE_TICKS = 4;
 const CREST_STRIDE = 3;
 const SPINNER_STRIDE = 3;
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const SHIMMER_HI = '\x1b[38;2;200;198;255m';
 const SHIMMER_MID = '\x1b[38;2;120;115;250m';
 const GRAY = '\x1b[38;5;245m';
+
+function formatAge(ms) {
+  const s = Math.max(1, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h`;
+}
 
 function shimmer(word, tick) {
   const crest = (tick * CREST_STRIDE) % word.length;
@@ -119,14 +127,18 @@ function getStatus(state, now) {
   if (contextReady && context.memoryItemsLoaded > 0) {
     parts.push(`${context.memoryItemsLoaded} loaded`);
   }
+  let savedAt;
+  let recalledAt;
   if (capture?.count > 0 && capture.updatedAt >= generation) {
     parts.push(`${capture.count} captured`);
+    savedAt = capture.updatedAt;
   }
   if (search?.count > 0 && search.updatedAt >= generation) {
     parts.push(`${search.count} ${search.count === 1 ? 'recall' : 'recalls'}`);
+    recalledAt = search.updatedAt;
   }
 
-  if (parts.length > 0) return { kind: 'tally', parts };
+  if (parts.length > 0) return { kind: 'tally', parts, savedAt, recalledAt };
   return contextReady ? { kind: 'ready' } : null;
 }
 
@@ -160,6 +172,16 @@ function renderStatusline(state, options = {}) {
   if (status.kind === 'ready') {
     return `${brand} ${WHITE}· ready${RESET}`;
   }
+
+  // Rotate real content, not just paint: the tally pane alternates with live
+  // relative ages that tick upward, so the words themselves keep changing.
+  const panes = [null];
+  if (status.savedAt) panes.push(`saved ${formatAge(now - status.savedAt)} ago`);
+  if (status.recalledAt) {
+    panes.push(`recalled ${formatAge(now - status.recalledAt)} ago`);
+  }
+  const pane = panes[Math.floor(tick / PANE_TICKS) % panes.length];
+  if (pane) return `${brand} ${WHITE}·${RESET} ${WHITE}${pane}${RESET}`;
 
   const emphasized = Math.floor(tick / EMPHASIS_TICKS) % status.parts.length;
   const parts = status.parts.map((part, i) =>
