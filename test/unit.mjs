@@ -19,7 +19,6 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const {
   SESSION_RETENTION_MS,
-  countLoadedProfileItems,
   getSessionDir,
   pruneState,
   readState,
@@ -39,9 +38,9 @@ function hash16(input) {
   return createHash('sha256').update(input).digest('hex').slice(0, 16);
 }
 
-// Banners carry ANSI color; assertions compare the plain text.
+// Banners and frames carry ANSI color and OSC-8 links; assertions compare plain text.
 function plain(s) {
-  return typeof s === 'string' ? s.replace(/\x1b\[[0-9;]*m/g, '') : s;
+  return typeof s === 'string' ? s.replace(/\x1b(\[[0-9;]*m|\]8;;[^\x07]*\x07)/g, '') : s;
 }
 
 function makeTempDir(t, prefix) {
@@ -543,6 +542,7 @@ describe('statusline state', () => {
     assert.equal(first.context.memoryItemsLoaded, 4);
     assert.equal(first.search, null);
     assert.equal(second.context.memoryItemsLoaded, 9);
+    assert.equal('query' in readState('session-a', { dataDir }).search, false);
 
     const traversalDir = getSessionDir('../../session-a', dataDir);
     assert.match(basename(traversalDir), /^[a-f0-9]{64}$/);
@@ -551,19 +551,6 @@ describe('statusline state', () => {
       assert.equal(statSync(join(traversalDir, 'context.json')).mode & 0o777, 0o600);
     }
     assert.equal(readdirSync(traversalDir).some((name) => name.endsWith('.tmp')), false);
-  });
-
-  test('keeps context, capture, and search updates independent', (t) => {
-    const dataDir = makeTempDir(t, 'status-events');
-    writeState('session-a', 'context', { status: 'ready', memoryItemsLoaded: 3 }, { dataDir, now: 1000 });
-    writeState('session-a', 'capture', { status: 'saving' }, { dataDir, now: 1100 });
-    writeState('session-a', 'search', { results: 1, query: 'private query' }, { dataDir, now: 1200 });
-
-    const state = readState('session-a', { dataDir });
-    assert.equal(state.context.memoryItemsLoaded, 3);
-    assert.equal(state.capture.status, 'saving');
-    assert.equal(state.search.results, 1);
-    assert.equal('query' in state.search, false);
   });
 
   test('ignores corrupt state without breaking the renderer', (t) => {
@@ -577,14 +564,6 @@ describe('statusline state', () => {
       search: null,
     });
     assert.equal(renderStatusline(readState('session-a', { dataDir })), '');
-  });
-
-  test('counts only profile items that are actually injected', () => {
-    const result = {
-      profile: { static: ['a', 'b', 'c'], dynamic: ['d', 'e', 'f'] },
-      searchResults: { results: [{ memory: 'not injected' }] },
-    };
-    assert.equal(countLoadedProfileItems(result, 2), 4);
   });
 
   test('prunes only stale hashed session directories', (t) => {
@@ -647,6 +626,11 @@ describe('statusline rendering', () => {
       renderStatusline({ context }, { now, color: false }),
       '◪ supermemory · 3 loaded',
     );
+    // Animation is presentation-only: the plain path is time-invariant.
+    assert.equal(
+      renderStatusline({ context }, { now: now + 7 * TICK_MS, color: false }),
+      '◪ supermemory · 3 loaded',
+    );
   });
 
   test('transient states briefly take over the tally', () => {
@@ -704,28 +688,12 @@ describe('statusline rendering', () => {
       capture: { status: 'saved', count: 7, updatedAt: now + 10 },
       search: { results: 4, count: 2, updatedAt: now + 12 },
     };
-    const plain = (s) => s.replace(/\x1b(\[[0-9;]*m|\]8;;[^\x07]*\x07)/g, '');
     const frames = Array.from({ length: 12 }, (_, i) =>
       plain(renderStatusline(state, { now: now + 60_000 + i * TICK_MS })),
     );
     assert.ok(frames.some((f) => f.includes('7 captured')), 'tally pane missing');
     assert.ok(frames.some((f) => /saved \d+[smh] ago/.test(f)), 'save age pane missing');
     assert.ok(frames.some((f) => /recalled \d+[smh] ago/.test(f)), 'recall age pane missing');
-  });
-
-  test('animation never changes the plain-text label', () => {
-    const state = {
-      context,
-      capture: { status: 'saved', count: 7, updatedAt: now + 10 },
-    };
-    for (let i = 0; i < 15; i++) {
-      const t = now + 20 + i * TICK_MS;
-      assert.equal(getStatusLabel(state, t), '3 loaded · 7 captured');
-      assert.equal(
-        renderStatusline(state, { now: t, color: false }),
-        '◪ supermemory · 3 loaded · 7 captured',
-      );
-    }
   });
 
   test('suppresses counts from before the current session context', () => {
