@@ -16,7 +16,7 @@ For deep background (resuming after time away, starting substantial work), launc
 
 Skip only for greetings/meta, trivially mechanical requests, or topics you already recalled this session.
 
-Be visible about it: ◆ is the supermemory mark — anything derived from recalled or injected memory carries it. When a memory shapes your answer, credit it in one short ◆-marked line at the point of use (e.g. "◆ from memory: you decided X on Aug 6").
+Be visible about it: ◪ is the supermemory mark — anything derived from recalled or injected memory carries it. When a memory shapes your answer, credit it at the point of use as a natural sentence prefixed with ◪ (e.g. "◪ last week you told me about X", "◪ on Aug 6 you decided X"). If you name the source, say "from supermemory" — never "from memory".
 </supermemory-recall>`;
 }
 

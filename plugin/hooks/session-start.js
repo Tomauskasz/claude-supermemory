@@ -56,7 +56,7 @@ function statuslineTip() {
       return null;
     }
     fs.writeFileSync(STATUSLINE_TIP_FILE, new Date().toISOString());
-    return `◆ Supermemory status line available: add \`node ~/.supermemory-claude/statusline-current\` to your statusLine command.`;
+    return `◪ Supermemory status line available: add \`node ~/.supermemory-claude/statusline-current\` to your statusLine command.`;
   } catch {
     return null;
   }
@@ -73,7 +73,7 @@ function markTip() {
     if (fs.existsSync(MARK_TIP_FILE)) return null;
     fs.mkdirSync(path.dirname(MARK_TIP_FILE), { recursive: true });
     fs.writeFileSync(MARK_TIP_FILE, new Date().toISOString());
-    return '◆ is the supermemory mark — whenever you see it (statusline, notices, Claude\'s answers), that information came from your memory.';
+    return '◪ is the supermemory mark — whenever you see it (statusline, notices, Claude\'s answers), that information came from supermemory.';
   } catch {
     return null;
   }
@@ -115,17 +115,17 @@ function formatContext(profileResult, maxItems, containerTag, projectName) {
   const sections = [];
   if (statics.length > 0) {
     sections.push(
-      `## User Profile (Persistent)\n${statics.map((f) => `- ◆ ${f}`).join('\n')}`,
+      `## User Profile (Persistent)\n${statics.map((f) => `- ◪ ${f}`).join('\n')}`,
     );
   }
   if (dynamics.length > 0) {
     sections.push(
-      `## Recent Context\n${dynamics.map((f) => `- ◆ ${f}`).join('\n')}`,
+      `## Recent Context\n${dynamics.map((f) => `- ◪ ${f}`).join('\n')}`,
     );
   }
 
   return `<supermemory-context>
-Recalled memory for this project (${projectName}). Every line marked ◆ comes from supermemory — keep the mark when citing one (e.g. "◆ from memory: ...").
+Recalled memory for this project (${projectName}). Every line marked ◪ comes from supermemory — when citing one, keep the mark and phrase it naturally (e.g. "◪ last week you told me about X"). If you name the source, say "from supermemory" — never "from memory".
 This project's memory container: ${containerTag}
 
 ${sections.join('\n\n')}
@@ -210,7 +210,7 @@ Or set the SUPERMEMORY_CC_API_KEY environment variable.
 
     const memoryNotice =
       loaded > 0
-        ? `◆ supermemory · ${loaded} ${loaded === 1 ? 'memory' : 'memories'} loaded for ${projectName}`
+        ? `◪ supermemory · ${loaded} ${loaded === 1 ? 'memory' : 'memories'} loaded for ${projectName}`
         : null;
 
     output(

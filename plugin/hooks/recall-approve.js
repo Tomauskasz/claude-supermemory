@@ -36,8 +36,8 @@ async function main() {
       }
       writeOutput({
         systemMessage: query
-          ? `◆ supermemory · recalling: ${query}`
-          : '◆ supermemory · recalling memories',
+          ? `◪ supermemory · recalling: ${query}`
+          : '◪ supermemory · recalling memories',
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'allow',
