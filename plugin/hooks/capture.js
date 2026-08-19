@@ -1,7 +1,4 @@
-const {
-  SupermemoryClient,
-  PERSONAL_ENTITY_CONTEXT,
-} = require('./lib/supermemory-client');
+const { addMemory, AGENT_ENTITY_CONTEXT } = require('./lib/api');
 const {
   getContainerTag,
   getProjectIdentity,
@@ -16,53 +13,38 @@ const {
   getSignalConfig,
 } = require('./lib/settings');
 const { readStdin, writeOutput } = require('./lib/stdin');
-const {
-  formatNewEntries,
-  formatSignalEntries,
-} = require('./lib/transcript-formatter');
+const { formatNewEntries, formatSignalEntries } = require('./lib/transcript');
 const { getUserFriendlyError } = require('./lib/error-helpers');
 const { saveLastSession } = require('./lib/last-session');
+const { readState, writeState } = require('./lib/statusline-state');
 
 async function main() {
   const settings = loadSettings();
+  let sessionId;
 
   try {
     const input = await readStdin();
     const cwd = input.cwd || process.cwd();
-    const sessionId = input.session_id;
+    sessionId = input.session_id;
     const transcriptPath = input.transcript_path;
     const projectConfig = loadProjectConfig(cwd);
 
-    debugLog(settings, 'Stop', { sessionId, transcriptPath });
-
     if (!transcriptPath || !sessionId) {
-      debugLog(settings, 'Missing transcript path or session id');
       writeOutput({ continue: true });
       return;
     }
 
     let apiKey;
     try {
-      apiKey = getApiKey(settings, cwd, projectConfig);
+      apiKey = getApiKey(cwd, projectConfig);
     } catch {
       writeOutput({ continue: true });
       return;
     }
 
-    const signalConfig = getSignalConfig(cwd);
-    const useSignalExtraction = signalConfig.enabled;
-
-    debugLog(settings, 'Signal extraction', { enabled: useSignalExtraction });
-
-    let formatted;
-    if (useSignalExtraction) {
-      formatted = formatSignalEntries(transcriptPath, sessionId, cwd);
-      debugLog(settings, 'Signal extraction result', {
-        hasContent: !!formatted,
-      });
-    } else {
-      formatted = formatNewEntries(transcriptPath, sessionId, cwd);
-    }
+    const formatted = getSignalConfig(cwd).enabled
+      ? formatSignalEntries(transcriptPath, sessionId, cwd)
+      : formatNewEntries(transcriptPath, sessionId, cwd);
 
     if (!formatted) {
       debugLog(settings, 'No new content to save');
@@ -71,34 +53,42 @@ async function main() {
     }
 
     const baseUrl = getBaseUrl(cwd, projectConfig);
-    const client = new SupermemoryClient(apiKey, undefined, { baseUrl });
     const containerTag = getContainerTag(cwd);
-    const projectName = getProjectName(cwd);
 
-    const result = await client.addMemory(
+    const captured = readState(sessionId).capture?.count || 0;
+    writeState(sessionId, 'capture', { status: 'saving', count: captured });
+
+    const result = await addMemory(
+      baseUrl,
+      apiKey,
       formatted,
       containerTag,
       {
         type: 'session_turn',
-        project: projectName,
+        project: getProjectName(cwd),
         sm_project_id: getProjectIdentity(cwd),
         sm_scope: 'personal',
         sm_capture_mode: 'automatic',
         timestamp: new Date().toISOString(),
       },
-      { customId: sessionId, entityContext: PERSONAL_ENTITY_CONTEXT },
+      { customId: sessionId, entityContext: AGENT_ENTITY_CONTEXT },
     );
 
+    writeState(sessionId, 'capture', { status: 'saved', count: captured + 1 });
+
     if (result?.id) {
-      saveLastSession({ id: result.id, containerTag });
+      try {
+        saveLastSession({ id: result.id, containerTag });
+      } catch {}
     }
 
     debugLog(settings, 'Session turn saved', { length: formatted.length });
     writeOutput({ continue: true });
   } catch (err) {
     const friendly = getUserFriendlyError(err);
-    debugLog(settings, 'Error', { error: friendly });
+    debugLog(settings, 'Capture error', { error: friendly });
     console.error(`Supermemory: ${friendly}`);
+    writeState(sessionId, 'capture', { status: 'error' });
     writeOutput({ continue: true });
   }
 }

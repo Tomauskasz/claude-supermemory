@@ -5,7 +5,7 @@ on:
 
 jobs:
   quality-checks:
-    name: Lint & Build
+    name: Lint & Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -23,5 +23,5 @@ jobs:
       - name: Run Biome CI
         run: npx biome ci .
 
-      - name: Build
-        run: npm run build
+      - name: Test
+        run: npm test

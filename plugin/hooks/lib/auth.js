@@ -1,11 +1,17 @@
+const { execFile } = require('node:child_process');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { openUrl } = require('./open-url');
 
-const authSuccessHtml = require('../templates/auth-success.html');
-const authErrorHtml = require('../templates/auth-error.html');
+const authSuccessHtml = fs.readFileSync(
+  path.join(__dirname, '../templates/auth-success.html'),
+  'utf-8',
+);
+const authErrorHtml = fs.readFileSync(
+  path.join(__dirname, '../templates/auth-error.html'),
+  'utf-8',
+);
 
 const SETTINGS_DIR = path.join(os.homedir(), '.supermemory-claude');
 const CREDENTIALS_FILE = path.join(SETTINGS_DIR, 'credentials.json');
@@ -14,6 +20,37 @@ const AUTH_BASE_URL =
   process.env.SUPERMEMORY_AUTH_URL || 'https://app.supermemory.ai/auth/connect';
 const AUTH_PORT = 19876;
 const AUTH_TIMEOUT = 25000;
+
+function execFileAsync(command, args) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { windowsHide: true }, (err) => {
+      err ? reject(err) : resolve();
+    });
+  });
+}
+
+async function openUrl(url) {
+  const target = url.toString();
+  if (!/^https?:\/\//i.test(target)) {
+    throw new Error('Refusing to open non-http URL');
+  }
+  if (process.platform === 'win32') {
+    try {
+      await execFileAsync('rundll32.exe', [
+        'url.dll,FileProtocolHandler',
+        target,
+      ]);
+      return;
+    } catch {}
+    await execFileAsync('cmd.exe', ['/c', 'start', '""', target]);
+    return;
+  }
+  if (process.platform === 'darwin') {
+    await execFileAsync('open', [target]);
+    return;
+  }
+  await execFileAsync('xdg-open', [target]);
+}
 
 function ensureDir() {
   if (!fs.existsSync(SETTINGS_DIR)) {
@@ -109,4 +146,5 @@ module.exports = {
   saveCredentials,
   clearCredentials,
   startAuthFlow,
+  openUrl,
 };

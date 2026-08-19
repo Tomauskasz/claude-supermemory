@@ -3,14 +3,11 @@ const path = require('node:path');
 const os = require('node:os');
 const { loadCredentials } = require('./auth');
 const { loadProjectConfig } = require('./project-config');
-const { BASE_URL } = require('./constants');
 
+const BASE_URL = 'https://api.supermemory.ai';
 const SETTINGS_DIR = path.join(os.homedir(), '.supermemory-claude');
 const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
 
-// Available tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch,
-// Task, TaskOutput, TodoWrite, AskUserQuestion, ExitPlanMode, NotebookEdit,
-// LSP, MCPSearch, KillShell, Skill, EnterPlanMode
 const DEFAULT_SETTINGS = {
   includeTools: [],
   maxProfileItems: 5,
@@ -40,37 +37,20 @@ const DEFAULT_SETTINGS = {
   signalTurnsBefore: 3,
 };
 
-function ensureSettingsDir() {
-  if (!fs.existsSync(SETTINGS_DIR)) {
-    fs.mkdirSync(SETTINGS_DIR, { recursive: true });
-  }
-}
-
 function loadSettings() {
   const settings = { ...DEFAULT_SETTINGS };
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
-      const fileContent = fs.readFileSync(SETTINGS_FILE, 'utf-8');
-      Object.assign(settings, JSON.parse(fileContent));
+      Object.assign(settings, JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')));
     }
   } catch (err) {
     console.error(`Settings: Failed to load ${SETTINGS_FILE}: ${err.message}`);
   }
-  if (process.env.SUPERMEMORY_CC_API_KEY)
-    settings.apiKey = process.env.SUPERMEMORY_CC_API_KEY;
   if (process.env.SUPERMEMORY_DEBUG === 'true') settings.debug = true;
   return settings;
 }
 
-function saveSettings(settings) {
-  ensureSettingsDir();
-  const toSave = { ...settings };
-  delete toSave.apiKey;
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(toSave, null, 2));
-}
-
-function getApiKey(settings, cwd, projectConfig) {
-  if (settings.apiKey) return settings.apiKey;
+function getApiKey(cwd, projectConfig) {
   if (process.env.SUPERMEMORY_CC_API_KEY)
     return process.env.SUPERMEMORY_CC_API_KEY;
 
@@ -121,11 +101,12 @@ function debugLog(settings, message, data) {
 function getIncludeTools(cwd) {
   const settings = loadSettings();
   const projectConfig = loadProjectConfig(cwd || process.cwd());
-
-  const globalInclude = settings.includeTools || [];
-  const projectInclude = projectConfig?.includeTools || [];
-
-  const merged = [...new Set([...globalInclude, ...projectInclude])];
+  const merged = [
+    ...new Set([
+      ...(settings.includeTools || []),
+      ...(projectConfig?.includeTools || []),
+    ]),
+  ];
   return merged.map((t) => t.toLowerCase());
 }
 
@@ -138,18 +119,17 @@ function getSignalConfig(cwd) {
   const settings = loadSettings();
   const projectConfig = loadProjectConfig(cwd || process.cwd());
 
-  const globalEnabled = settings.signalExtraction || false;
-  const projectEnabled = projectConfig?.signalExtraction;
+  const enabled =
+    projectConfig?.signalExtraction !== undefined
+      ? projectConfig.signalExtraction
+      : settings.signalExtraction || false;
 
-  const enabled = projectEnabled !== undefined ? projectEnabled : globalEnabled;
-
-  const globalKeywords =
-    settings.signalKeywords || DEFAULT_SETTINGS.signalKeywords;
-  const projectKeywords = projectConfig?.signalKeywords || [];
-
-  const keywords = [...new Set([...globalKeywords, ...projectKeywords])].map(
-    (k) => k.toLowerCase(),
-  );
+  const keywords = [
+    ...new Set([
+      ...(settings.signalKeywords || DEFAULT_SETTINGS.signalKeywords),
+      ...(projectConfig?.signalKeywords || []),
+    ]),
+  ].map((k) => k.toLowerCase());
 
   const turnsBefore =
     projectConfig?.signalTurnsBefore ||
@@ -162,11 +142,9 @@ function getSignalConfig(cwd) {
 function getRecallConfig(cwd) {
   const settings = loadSettings();
   const projectConfig = loadProjectConfig(cwd || process.cwd());
-
-  const directive =
-    projectConfig?.recallDirective || settings.recallDirective || null;
-
-  return { directive };
+  return {
+    directive: projectConfig?.recallDirective || settings.recallDirective || null,
+  };
 }
 
 module.exports = {
@@ -174,7 +152,6 @@ module.exports = {
   SETTINGS_FILE,
   DEFAULT_SETTINGS,
   loadSettings,
-  saveSettings,
   getApiKey,
   getBaseUrl,
   debugLog,
