@@ -2,10 +2,11 @@ const { loadSettings, debugLog } = require('./lib/settings');
 const { readState, writeState } = require('./lib/statusline-state');
 const { readStdin, writeOutput } = require('./lib/stdin');
 
-// Plugin MCP tool names arrive as mcp__supermemory__<tool> (direct config) or
-// mcp__plugin_supermemory_supermemory__<tool> (plugin-scoped). Only read-only
+// Supermemory MCP tool names arrive as mcp__supermemory__<tool> (direct
+// config), mcp__plugin_supermemory_supermemory__<tool> (plugin-scoped), or
+// mcp__claude_ai_supermemory__<tool> (claude.ai connector). Only read-only
 // tools run without a prompt; writes (add_memory, save-memory, ...) still ask.
-const TOOL_NAME_RE = /^mcp__(?:plugin_supermemory_)?supermemory__(.+)$/;
+const TOOL_NAME_RE = /^mcp__(?:plugin_supermemory_|claude_ai_)?supermemory__(.+)$/;
 const READ_ONLY_TOOLS = new Set([
   'search_memory',
   'listSpaces',

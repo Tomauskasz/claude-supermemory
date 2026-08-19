@@ -1,22 +1,41 @@
+const { getProfile } = require('./lib/api');
 const { getContainerTag } = require('./lib/container-tag');
-const { loadSettings, debugLog, getRecallConfig } = require('./lib/settings');
+const { loadProjectConfig } = require('./lib/project-config');
+const {
+  loadSettings,
+  getApiKey,
+  getBaseUrl,
+  debugLog,
+  getRecallConfig,
+} = require('./lib/settings');
+const { readState, writeState } = require('./lib/statusline-state');
 const { readStdin, writeOutput } = require('./lib/stdin');
 
-function buildDirective(containerTag) {
+// Recall is performed HERE, not delegated to the model: the hook searches
+// supermemory with the prompt itself and injects the top matches, so recall
+// happens on every substantive prompt instead of only when the model chooses
+// to spend a tool call. A configured recallDirective restores advisory mode.
+const MIN_PROMPT_LENGTH = 12;
+const MAX_QUERY_LENGTH = 500;
+const MAX_RESULTS = 5;
+const MAX_RESULT_CHARS = 300;
+const MIN_SIMILARITY = 0.55;
+const SEARCH_TIMEOUT_MS = 4000;
+
+function shouldSkip(prompt) {
+  if (prompt.length < MIN_PROMPT_LENGTH) return true;
+  return ['/', '!', '#'].includes(prompt[0]);
+}
+
+function formatRecall(results, containerTag) {
+  const lines = results.map(
+    (r) => `- ◪ ${r.memory.replace(/\s+/g, ' ').slice(0, MAX_RESULT_CHARS)}`,
+  );
   return `<supermemory-recall>
-Before responding, consider whether saved memory (past sessions, decisions, conventions, the user's preferences) could improve your answer to THIS message. When in doubt, search — recall is cheap, read-only, and pre-approved.
+◪ Recalled from supermemory for this prompt (relevance-ranked):
+${lines.join('\n')}
 
-Recall — via the supermemory search_memory tool (containerTag: "${containerTag}") — when the message:
-- refers to earlier work or decisions ("the auth flow", "like we did", "continue", "the bug from before")
-- touches an area where saved conventions, patterns, or preferences may exist
-- starts a new task or feature — check for prior decisions before choosing an approach
-- is ambiguous in a way past context would resolve
-
-For deep background (resuming after time away, starting substantial work), launch the supermemory context-gatherer agent instead of a single search.
-
-Skip only for greetings/meta, trivially mechanical requests, or topics you already recalled this session.
-
-Be visible about it: ◪ is the supermemory mark — anything derived from recalled or injected memory carries it. When a memory shapes your answer, credit it at the point of use as a natural sentence prefixed with ◪ (e.g. "◪ last week you told me about X", "◪ on Aug 6 you decided X"). If you name the source, say "from supermemory" — never "from memory".
+When one of these shapes your answer, credit it naturally with the ◪ prefix (e.g. "◪ earlier you decided X"); if you name the source, say "from supermemory" — never "from memory". For deeper history, call the supermemory search_memory tool (containerTag: "${containerTag}") or launch the context-gatherer agent.
 </supermemory-recall>`;
 }
 
@@ -26,22 +45,76 @@ async function main() {
   try {
     const input = await readStdin();
     const cwd = input.cwd || process.cwd();
+    const prompt = (input.prompt || '').trim();
     const { directive } = getRecallConfig(cwd);
 
-    debugLog(settings, 'Injecting recall directive', {
-      sessionId: input.session_id,
-      custom: !!directive,
-    });
+    if (directive) {
+      writeOutput({
+        hookSpecificOutput: {
+          hookEventName: 'UserPromptSubmit',
+          additionalContext: directive,
+        },
+      });
+      return;
+    }
+
+    if (shouldSkip(prompt)) {
+      writeOutput({ continue: true, suppressOutput: true });
+      return;
+    }
+
+    const projectConfig = loadProjectConfig(cwd);
+    let apiKey;
+    try {
+      apiKey = getApiKey(cwd, projectConfig);
+    } catch {
+      writeOutput({ continue: true, suppressOutput: true });
+      return;
+    }
+
+    const containerTag = getContainerTag(cwd);
+    const response = await getProfile(
+      getBaseUrl(cwd, projectConfig),
+      apiKey,
+      containerTag,
+      prompt.slice(0, MAX_QUERY_LENGTH),
+      { timeoutMs: SEARCH_TIMEOUT_MS },
+    );
+
+    const results = (response?.searchResults?.results || [])
+      .filter((r) => typeof r?.memory === 'string' && r.memory.trim())
+      .filter((r) => !Number.isFinite(r.similarity) || r.similarity >= MIN_SIMILARITY)
+      .slice(0, MAX_RESULTS);
+
+    if (input.session_id) {
+      const recalls = readState(input.session_id).search?.count || 0;
+      writeState(input.session_id, 'search', {
+        results: results.length,
+        count: recalls + 1,
+      });
+    }
+
+    debugLog(settings, 'Prompt recall', { query: prompt.slice(0, 80), hits: results.length });
+
+    if (results.length === 0) {
+      writeOutput({ continue: true, suppressOutput: true });
+      return;
+    }
 
     writeOutput({
+      systemMessage: `◪ supermemory · recalled ${results.length} ${results.length === 1 ? 'memory' : 'memories'}`,
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: directive || buildDirective(getContainerTag(cwd)),
+        additionalContext: formatRecall(results, containerTag),
       },
     });
   } catch (err) {
     debugLog(settings, 'Recall directive error', { error: err.message });
-    writeOutput({ continue: true, suppressOutput: true });
+    writeOutput({
+      systemMessage: `◪ supermemory · recall failed: ${err.message.slice(0, 80)}`,
+      continue: true,
+      suppressOutput: true,
+    });
   }
 }
 

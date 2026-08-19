@@ -40,8 +40,8 @@ async function post(baseUrl, apiKey, path, body, timeoutMs = 15000) {
   return response.json();
 }
 
-function getProfile(baseUrl, apiKey, containerTag, query) {
-  return post(baseUrl, apiKey, '/v4/profile', { containerTag, q: query });
+function getProfile(baseUrl, apiKey, containerTag, query, options = {}) {
+  return post(baseUrl, apiKey, '/v4/profile', { containerTag, q: query }, options.timeoutMs);
 }
 
 function addMemory(baseUrl, apiKey, content, containerTag, metadata, options = {}) {

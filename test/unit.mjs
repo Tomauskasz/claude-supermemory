@@ -162,21 +162,89 @@ describe('container tags', () => {
 });
 
 describe('recall-directive hook', () => {
-  test('injects the directive with the active container tag', async (t) => {
+  test('searches with the prompt and injects the top matches', async (t) => {
     const { repo, home } = makeRepo(t);
+    mkdirSync(join(home, '.supermemory-claude'), { recursive: true });
+    writeFileSync(
+      join(home, '.supermemory-claude', 'credentials.json'),
+      JSON.stringify({ apiKey: 'sm_test_key_0123456789abcdef' }),
+    );
+    const stub = await startStubServer(t, (record, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(
+        JSON.stringify({
+          searchResults: {
+            results: [
+              { memory: 'Chose Drizzle over Prisma', similarity: 0.82 },
+              { memory: 'Errors must be loud and obvious', similarity: 0.71 },
+              { memory: 'irrelevant low-similarity hit', similarity: 0.2 },
+            ],
+          },
+        }),
+      );
+    });
+
     const { code, stdout } = await runHook(
       'recall-directive.js',
-      { session_id: 's1', cwd: repo },
-      { HOME: home, USERPROFILE: home },
+      { session_id: 's1', cwd: repo, prompt: 'continue the database work from before' },
+      { HOME: home, USERPROFILE: home, SUPERMEMORY_API_URL: stub.url },
     );
     assert.equal(code, 0);
     const output = JSON.parse(stdout);
     const context = output.hookSpecificOutput.additionalContext;
     assert.equal(output.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
     assert.match(context, /<supermemory-recall>/);
-    assert.match(context, /search_memory/);
+    assert.match(context, /- ◪ Chose Drizzle over Prisma/);
+    assert.match(context, /- ◪ Errors must be loud and obvious/);
+    assert.doesNotMatch(context, /irrelevant low-similarity hit/);
     assert.match(context, /repo_example_project__/);
-    assert.match(context, /◪ last week you told me/);
+    assert.equal(output.systemMessage, '◪ supermemory · recalled 2 memories');
+    assert.equal(stub.requests[0].url, '/v4/profile');
+    assert.equal(
+      JSON.parse(stub.requests[0].body).q,
+      'continue the database work from before',
+    );
+
+    const state = readState('s1', {
+      dataDir: join(home, '.supermemory-claude', 'statusline'),
+    });
+    assert.equal(state.search.count, 1);
+    assert.equal(state.search.results, 2);
+  });
+
+  test('skips trivial prompts and slash commands without an API call', async (t) => {
+    const { repo, home } = makeRepo(t);
+    mkdirSync(join(home, '.supermemory-claude'), { recursive: true });
+    writeFileSync(
+      join(home, '.supermemory-claude', 'credentials.json'),
+      JSON.stringify({ apiKey: 'sm_test_key_0123456789abcdef' }),
+    );
+    const stub = await startStubServer(t, (record, res) => res.end('{}'));
+    for (const prompt of ['hi', '/supermemory:status', '!ls', undefined]) {
+      const { stdout } = await runHook(
+        'recall-directive.js',
+        { session_id: 's1', cwd: repo, prompt },
+        { HOME: home, USERPROFILE: home, SUPERMEMORY_API_URL: stub.url },
+      );
+      assert.equal(JSON.parse(stdout).hookSpecificOutput, undefined);
+    }
+    assert.equal(stub.requests.length, 0);
+  });
+
+  test('a configured recallDirective restores advisory mode verbatim', async (t) => {
+    const { repo, git, home } = makeRepo(t);
+    const configDir = join(git(['rev-parse', '--show-toplevel']), '.claude', '.supermemory-claude');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({ recallDirective: 'CUSTOM DIRECTIVE' }),
+    );
+    const { stdout } = await runHook(
+      'recall-directive.js',
+      { session_id: 's1', cwd: repo, prompt: 'a long substantive prompt here' },
+      { HOME: home, USERPROFILE: home },
+    );
+    assert.equal(JSON.parse(stdout).hookSpecificOutput.additionalContext, 'CUSTOM DIRECTIVE');
   });
 });
 
@@ -186,6 +254,7 @@ describe('recall-approve hook', () => {
     for (const toolName of [
       'mcp__supermemory__search_memory',
       'mcp__plugin_supermemory_supermemory__search_memory',
+      'mcp__claude_ai_supermemory__search_memory',
     ]) {
       const { stdout } = await runHook(
         'recall-approve.js',
