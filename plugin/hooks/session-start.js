@@ -56,7 +56,7 @@ function statuslineTip() {
       return null;
     }
     fs.writeFileSync(STATUSLINE_TIP_FILE, new Date().toISOString());
-    return `◪ Supermemory status line available: add \`node ~/.supermemory-claude/statusline-current\` to your statusLine command.`;
+    return `◪ Supermemory status line available — add to ~/.claude/settings.json: "statusLine": {"type": "command", "command": "node ~/.supermemory-claude/statusline-current", "refreshInterval": 1} (refreshInterval keeps it animating while idle).`;
   } catch {
     return null;
   }
