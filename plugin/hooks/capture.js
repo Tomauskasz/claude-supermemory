@@ -1,0 +1,98 @@
+const { addMemory, AGENT_ENTITY_CONTEXT } = require('./lib/api');
+const {
+  getContainerTag,
+  getProjectIdentity,
+  getProjectName,
+} = require('./lib/container-tag');
+const { loadProjectConfig } = require('./lib/project-config');
+const {
+  loadSettings,
+  getApiKey,
+  getBaseUrl,
+  debugLog,
+  getSignalConfig,
+} = require('./lib/settings');
+const { readStdin, writeOutput } = require('./lib/stdin');
+const { formatNewEntries, formatSignalEntries } = require('./lib/transcript');
+const { getUserFriendlyError } = require('./lib/error-helpers');
+const { saveLastSession } = require('./lib/last-session');
+const { writeState } = require('./lib/statusline-state');
+
+async function main() {
+  const settings = loadSettings();
+  let sessionId;
+
+  try {
+    const input = await readStdin();
+    const cwd = input.cwd || process.cwd();
+    sessionId = input.session_id;
+    const transcriptPath = input.transcript_path;
+    const projectConfig = loadProjectConfig(cwd);
+
+    if (!transcriptPath || !sessionId) {
+      writeOutput({ continue: true });
+      return;
+    }
+
+    let apiKey;
+    try {
+      apiKey = getApiKey(cwd, projectConfig);
+    } catch {
+      writeOutput({ continue: true });
+      return;
+    }
+
+    const formatted = getSignalConfig(cwd).enabled
+      ? formatSignalEntries(transcriptPath, sessionId, cwd)
+      : formatNewEntries(transcriptPath, sessionId, cwd);
+
+    if (!formatted) {
+      debugLog(settings, 'No new content to save');
+      writeOutput({ continue: true });
+      return;
+    }
+
+    const baseUrl = getBaseUrl(cwd, projectConfig);
+    const containerTag = getContainerTag(cwd);
+
+    writeState(sessionId, 'capture', { status: 'saving' });
+
+    const result = await addMemory(
+      baseUrl,
+      apiKey,
+      formatted,
+      containerTag,
+      {
+        type: 'session_turn',
+        project: getProjectName(cwd),
+        sm_project_id: getProjectIdentity(cwd),
+        sm_scope: 'personal',
+        sm_capture_mode: 'automatic',
+        timestamp: new Date().toISOString(),
+      },
+      { customId: sessionId, entityContext: AGENT_ENTITY_CONTEXT },
+    );
+
+    writeState(sessionId, 'capture', { status: 'saved' });
+
+    if (result?.id) {
+      try {
+        saveLastSession({ id: result.id, containerTag });
+      } catch {}
+    }
+
+    debugLog(settings, 'Session turn saved', { length: formatted.length });
+    writeOutput({ continue: true });
+  } catch (err) {
+    const friendly = getUserFriendlyError(err);
+    debugLog(settings, 'Capture error', { error: friendly });
+    console.error(`Supermemory: ${friendly}`);
+    writeState(sessionId, 'capture', { status: 'error' });
+    writeOutput({ continue: true });
+  }
+}
+
+main().catch((err) => {
+  console.error(`Supermemory fatal: ${err.message}`);
+  process.exit(1);
+});

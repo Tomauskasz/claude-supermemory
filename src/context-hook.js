@@ -182,6 +182,11 @@ Or set SUPERMEMORY_CC_API_KEY environment variable manually.
       },
     ]);
 
+    const memoryNotice =
+      memoryItemsLoaded > 0
+        ? `supermemory · ${memoryItemsLoaded} ${memoryItemsLoaded === 1 ? 'memory' : 'memories'} loaded for ${projectName}`
+        : null;
+
     const errorNotice =
       apiErrors.length > 0
         ? `<supermemory-status>\n${[...new Set(apiErrors)].join('\n')}\n</supermemory-status>\n`
@@ -213,6 +218,7 @@ Memories will be saved as you work.
     writeSessionStartOutput(
       errorNotice + additionalContext,
       combineOutputParts([
+        memoryNotice,
         updateNotice,
         getStatuslineOnboardingNotice(statuslineDataDir),
       ]),

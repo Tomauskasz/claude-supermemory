@@ -2,7 +2,7 @@ const { loadSettings, debugLog } = require('./lib/settings');
 const { readStdin, writeOutput } = require('./lib/stdin');
 
 const SEARCH_BASH_RE =
-  /^node\s+"?(?:[^"\n$`]|\$(?!\())*search-memory\.cjs"?\s+(?:--(?:user|repo|both)\s+)?"(?:[^"\n$`]|\$(?!\())*"\s*$/;
+  /^node\s+["']?(?:[^"\n$`]|\$(?!\())*search-memory\.cjs["']?(?:\s+--[\w-]+(?:\s+(?:'[^'\n$`]*'|"(?:[^"\n$`]|\$(?!\())*"))?)*\s+"(?:[^"\n$`]|\$(?!\())*"\s*$/;
 const SEARCH_SKILL = 'supermemory-search';
 
 function isSupermemorySearch(toolName, toolInput) {
@@ -26,7 +26,14 @@ async function main() {
       debugLog(settings, 'Auto-approving recall search', {
         toolName: input.tool_name,
       });
+      const query =
+        input.tool_name === 'Bash'
+          ? String(input.tool_input?.command || '').match(/"([^"]+)"\s*$/)?.[1]
+          : null;
       writeOutput({
+        systemMessage: query
+          ? `supermemory · recalling: ${query}`
+          : 'supermemory · recalling memories',
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'allow',

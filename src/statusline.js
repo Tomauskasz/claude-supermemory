@@ -148,8 +148,15 @@ async function main() {
     const sessionId = input?.session_id;
     if (!sessionId) return;
 
+    // Prefer our own directory: the installer copies this runtime into the plugin
+    // data dir, and CLAUDE_PLUGIN_DATA can leak from another plugin's context.
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const ownStateDir = path.join(__dirname, 'statusline-state');
     const state = readState(sessionId, {
-      dataDir: process.env.CLAUDE_PLUGIN_DATA || __dirname,
+      dataDir: fs.existsSync(ownStateDir)
+        ? __dirname
+        : process.env.CLAUDE_PLUGIN_DATA || __dirname,
     });
     const output = renderStatusline(state);
     if (output) process.stdout.write(output);

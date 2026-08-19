@@ -8,7 +8,7 @@
     "build": "node scripts/build.js",
     "clean": "rm -rf plugin/scripts/*.cjs",
     "test": "node --test test/unit.mjs",
-    "lint": "biome check .",
+    "lint": "biome check . && oxlint",
     "lint:fix": "biome check --write .",
     "format": "biome format --write ."
   },
@@ -17,7 +17,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.13",
-    "esbuild": "^0.25.0"
+    "@oxlint/plugins": "^1.79.0",
+    "esbuild": "^0.25.0",
+    "oxlint": "^1.79.0"
   },
   "dependencies": {
     "supermemory": "^4.0.0"

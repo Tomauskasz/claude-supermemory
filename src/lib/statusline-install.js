@@ -173,10 +173,23 @@ function isStatuslineInstalled(pluginDataDir, configDir) {
 
   try {
     const settings = readSettings(settingsPath);
+    const command = settings.statusLine?.command;
+    if (
+      !fs.existsSync(runtimePath) ||
+      settings.statusLine?.type !== 'command' ||
+      typeof command !== 'string'
+    ) {
+      return false;
+    }
+    // Match by path so composite statuslines that embed the runtime
+    // (absolute or ~-prefixed) count as installed.
+    const normalized = runtimePath.replaceAll('\\', '/');
+    const home = os.homedir().replaceAll('\\', '/');
+    const tilde = normalized.startsWith(`${home}/`)
+      ? `~${normalized.slice(home.length)}`
+      : null;
     return (
-      fs.existsSync(runtimePath) &&
-      settings.statusLine?.type === 'command' &&
-      settings.statusLine.command === formatStatuslineCommand(runtimePath)
+      command.includes(normalized) || (tilde !== null && command.includes(tilde))
     );
   } catch {
     return false;
