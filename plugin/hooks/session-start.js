@@ -93,20 +93,6 @@ function welcomeBackNotice(containerTag) {
   }
 }
 
-function formatRelativeTime(isoTimestamp) {
-  try {
-    const minutes = (Date.now() - new Date(isoTimestamp).getTime()) / 60000;
-    if (minutes < 30) return 'just now';
-    if (minutes < 60) return `${Math.floor(minutes)}mins ago`;
-    if (minutes < 1440) return `${Math.floor(minutes / 60)}hrs ago`;
-    if (minutes < 10080) return `${Math.floor(minutes / 1440)}d ago`;
-    const dt = new Date(isoTimestamp);
-    return `${dt.getDate()} ${dt.toLocaleString('en', { month: 'short' })}`;
-  } catch {
-    return '';
-  }
-}
-
 function formatContext(profileResult, maxItems, containerTag, projectName) {
   const statics = (profileResult?.profile?.static || []).slice(0, maxItems);
   const dynamics = (profileResult?.profile?.dynamic || []).slice(0, maxItems);

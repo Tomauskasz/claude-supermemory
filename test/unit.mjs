@@ -250,6 +250,35 @@ describe('recall-directive hook', () => {
   });
 });
 
+describe('stdin handling', () => {
+  test('hooks finish even when stdin never emits end (issue #25)', async (t) => {
+    const home = makeTempDir(t, 'stdin-home');
+    const child = spawn('node', [join(HOOKS_DIR, 'recall-approve.js')], {
+      env: { ...process.env, HOME: home, USERPROFILE: home },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    child.stdin.write(
+      JSON.stringify({ session_id: 's1', tool_name: 'Bash', tool_input: {} }),
+    );
+    // stdin is deliberately left open — on Windows 'end' never fires.
+    const stdout = await new Promise((resolve, reject) => {
+      let out = '';
+      const guard = setTimeout(() => {
+        child.kill();
+        reject(new Error('hook did not finish with stdin held open'));
+      }, 5000);
+      child.stdout.on('data', (chunk) => {
+        out += chunk;
+      });
+      child.on('close', () => {
+        clearTimeout(guard);
+        resolve(out);
+      });
+    });
+    assert.equal(JSON.parse(stdout).continue, true);
+  });
+});
+
 describe('recall-approve hook', () => {
   test('auto-approves read-only supermemory tools with a visible message', async (t) => {
     const home = makeTempDir(t, 'approve-home');
