@@ -447,7 +447,9 @@ describe('capture hook', () => {
     assert.match(body.content, /statusline symlink/);
     assert.match(body.containerTag, /^repo_example_project__/);
     assert.equal(body.metadata.agent_scope, 'personal');
-    assert.equal('sm_scope' in body.metadata, false);
+    assert.equal(body.metadata.agent_source, 'claude-code');
+    // sm_* is Supermemory's internal namespace — plugin metadata must never use it.
+    assert.deepEqual(Object.keys(body.metadata).filter((k) => k.startsWith('sm_')), []);
     assert.equal(body.customId, 'sess-2');
     assert.match(body.entityContext, /EXTRACT/);
 

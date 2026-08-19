@@ -66,9 +66,9 @@ async function main() {
       {
         type: 'session_turn',
         project: getProjectName(cwd),
-        sm_project_id: getProjectIdentity(cwd),
+        agent_project_id: getProjectIdentity(cwd),
         agent_scope: 'personal',
-        sm_capture_mode: 'automatic',
+        agent_capture_mode: 'automatic',
         timestamp: new Date().toISOString(),
       },
       { customId: sessionId, entityContext: AGENT_ENTITY_CONTEXT },

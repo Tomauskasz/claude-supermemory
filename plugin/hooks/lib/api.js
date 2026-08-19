@@ -57,7 +57,7 @@ function addMemory(baseUrl, apiKey, content, containerTag, metadata, options = {
   const body = {
     content,
     containerTag,
-    metadata: { sm_source: 'claude-code', ...metadata },
+    metadata: { agent_source: 'claude-code', ...metadata },
   };
   if (options.customId) body.customId = options.customId;
   if (options.entityContext) body.entityContext = options.entityContext;
