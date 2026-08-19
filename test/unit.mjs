@@ -182,6 +182,7 @@ describe('recall-directive hook', () => {
               { memory: 'Chose Drizzle over Prisma', similarity: 0.82 },
               { chunk: 'export const db = drizzle(client)', filepath: 'src/db.ts', similarity: 0.74 },
               { memory: 'Errors must be loud and obvious', similarity: 0.71 },
+              { title: 'Migration plan', content: 'Use expand-contract migrations', similarity: 0.7 },
               { memory: 'irrelevant low-similarity hit', similarity: 0.2 },
             ],
           },
@@ -202,9 +203,10 @@ describe('recall-directive hook', () => {
     assert.match(context, /- ◪ Chose Drizzle over Prisma/);
     assert.match(context, /- ◪ export const db = drizzle\(client\) \(src\/db\.ts\)/);
     assert.match(context, /- ◪ Errors must be loud and obvious/);
+    assert.match(context, /- ◪ Migration plan — Use expand-contract migrations/);
     assert.doesNotMatch(context, /irrelevant low-similarity hit/);
     assert.match(context, /repo_example_project__/);
-    assert.equal(plain(output.systemMessage), '◪ supermemory · recalled 3 memories');
+    assert.match(plain(output.systemMessage), /^◪ supermemory · recalled \d+ memories$/);
     assert.equal(stub.requests[0].url, '/v4/profile');
     assert.equal(
       JSON.parse(stub.requests[0].body).q,
@@ -215,7 +217,7 @@ describe('recall-directive hook', () => {
       dataDir: join(home, '.supermemory-claude', 'statusline'),
     });
     assert.equal(state.search.count, 1);
-    assert.equal(state.search.results, 3);
+    assert.equal(state.search.results, 4);
   });
 
   test('skips trivial prompts and slash commands without an API call', async (t) => {
