@@ -1,6 +1,7 @@
 const AGENT_ENTITY_CONTEXT = `Shared coding-agent memory for one software repository.
 
 RULES:
+- Try to remember things that a human would remember — a teammate recalls decisions and lessons, not what state the working tree was in
 - Preserve durable context that helps a coding agent continue the work
 - Condense assistant responses into decisions, outcomes, and reusable knowledge
 - Keep user preferences and project facts concise and independently understandable
@@ -14,6 +15,7 @@ EXTRACT:
 - Decisions: "chose Drizzle over Prisma for performance", "using RSC for data fetching"
 
 SKIP:
+- Transient repo state git already tracks: uncommitted file lists, current branch position, in-flight commit/push status
 - Generic assistant suggestions the user did not accept
 - Transient command output and low-value implementation chatter
 - Granular details that do not help future work`;
