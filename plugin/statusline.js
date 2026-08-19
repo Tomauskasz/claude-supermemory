@@ -106,8 +106,8 @@ function getStatusLabel(state, now = Date.now()) {
 function renderStatusline(state, options = {}) {
   const label = getStatusLabel(state, options.now);
   if (!label) return '';
-  if (options.color === false) return `supermemory · ${label}`;
-  return `${BLUE}${BOLD}⚡ supermemory${RESET} ${WHITE}· ${label}${RESET}`;
+  if (options.color === false) return `◆ supermemory · ${label}`;
+  return `${BLUE}${BOLD}◆ supermemory${RESET} ${WHITE}· ${label}${RESET}`;
 }
 
 function readStatuslineInput(input = process.stdin, options = {}) {

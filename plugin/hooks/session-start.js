@@ -56,7 +56,7 @@ function statuslineTip() {
       return null;
     }
     fs.writeFileSync(STATUSLINE_TIP_FILE, new Date().toISOString());
-    return `Supermemory status line available: add \`node ~/.supermemory-claude/statusline-current\` to your statusLine command.`;
+    return `◆ Supermemory status line available: add \`node ~/.supermemory-claude/statusline-current\` to your statusLine command.`;
   } catch {
     return null;
   }
@@ -98,17 +98,17 @@ function formatContext(profileResult, maxItems, containerTag, projectName) {
   const sections = [];
   if (statics.length > 0) {
     sections.push(
-      `## User Profile (Persistent)\n${statics.map((f) => `- ${f}`).join('\n')}`,
+      `## User Profile (Persistent)\n${statics.map((f) => `- ◆ ${f}`).join('\n')}`,
     );
   }
   if (dynamics.length > 0) {
     sections.push(
-      `## Recent Context\n${dynamics.map((f) => `- ${f}`).join('\n')}`,
+      `## Recent Context\n${dynamics.map((f) => `- ◆ ${f}`).join('\n')}`,
     );
   }
 
   return `<supermemory-context>
-Recalled memory for this project (${projectName}). Reference it when relevant; credit visibly when it shapes an answer (e.g. "◆ from memory: ...").
+Recalled memory for this project (${projectName}). Every line marked ◆ comes from supermemory — keep the mark when citing one (e.g. "◆ from memory: ...").
 This project's memory container: ${containerTag}
 
 ${sections.join('\n\n')}
@@ -193,7 +193,7 @@ Or set the SUPERMEMORY_CC_API_KEY environment variable.
 
     const memoryNotice =
       loaded > 0
-        ? `supermemory · ${loaded} ${loaded === 1 ? 'memory' : 'memories'} loaded for ${projectName}`
+        ? `◆ supermemory · ${loaded} ${loaded === 1 ? 'memory' : 'memories'} loaded for ${projectName}`
         : null;
 
     output(

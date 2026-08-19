@@ -198,7 +198,7 @@ describe('recall-approve hook', () => {
       );
       const output = JSON.parse(stdout);
       assert.equal(output.hookSpecificOutput.permissionDecision, 'allow');
-      assert.equal(output.systemMessage, 'supermemory · recalling: auth flow decisions');
+      assert.equal(output.systemMessage, '◆ supermemory · recalling: auth flow decisions');
     }
   });
 
@@ -243,7 +243,7 @@ describe('session-start hook', () => {
     const output = JSON.parse(stdout);
     assert.match(output.hookSpecificOutput.additionalContext, /Uses Bun/);
     assert.match(output.hookSpecificOutput.additionalContext, /Working on statusline/);
-    assert.match(output.systemMessage, /supermemory · 2 memories loaded for Example\.Project/);
+    assert.match(output.systemMessage, /◆ supermemory · 2 memories loaded for Example\.Project/);
     assert.equal(stub.requests[0].url, '/v4/profile');
     assert.match(stub.requests[0].headers.authorization, /^Bearer sm_test/);
 
@@ -496,7 +496,7 @@ describe('statusline rendering', () => {
     );
     assert.equal(
       renderStatusline({ context }, { now, color: false }),
-      'supermemory · 3 memory items loaded',
+      '◆ supermemory · 3 memory items loaded',
     );
   });
 
