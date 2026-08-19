@@ -39,6 +39,11 @@ function hash16(input) {
   return createHash('sha256').update(input).digest('hex').slice(0, 16);
 }
 
+// Banners carry ANSI color; assertions compare the plain text.
+function plain(s) {
+  return typeof s === 'string' ? s.replace(/\x1b\[[0-9;]*m/g, '') : s;
+}
+
 function makeTempDir(t, prefix) {
   const root = join(tmpdir(), `claude-sm-${prefix}-${Date.now()}-${Math.random()}`);
   mkdirSync(root, { recursive: true });
@@ -200,7 +205,7 @@ describe('recall-directive hook', () => {
     assert.match(context, /- ◪ Errors must be loud and obvious/);
     assert.doesNotMatch(context, /irrelevant low-similarity hit/);
     assert.match(context, /repo_example_project__/);
-    assert.equal(output.systemMessage, '◪ supermemory · recalled 3 memories');
+    assert.equal(plain(output.systemMessage), '◪ supermemory · recalled 3 memories');
     assert.equal(stub.requests[0].url, '/v4/profile');
     assert.equal(
       JSON.parse(stub.requests[0].body).q,
@@ -231,6 +236,44 @@ describe('recall-directive hook', () => {
       assert.equal(JSON.parse(stdout).hookSpecificOutput, undefined);
     }
     assert.equal(stub.requests.length, 0);
+  });
+
+  test('dedupes across the session: repeats go silent, mixes are labeled', async (t) => {
+    const { repo, home } = makeRepo(t);
+    mkdirSync(join(home, '.supermemory-claude'), { recursive: true });
+    writeFileSync(
+      join(home, '.supermemory-claude', 'credentials.json'),
+      JSON.stringify({ apiKey: 'sm_test_key_0123456789abcdef' }),
+    );
+    let hits = [
+      { memory: 'Chose Drizzle over Prisma', similarity: 0.82 },
+      { memory: 'Errors must be loud and obvious', similarity: 0.71 },
+    ];
+    const stub = await startStubServer(t, (record, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ searchResults: { results: hits } }));
+    });
+    const env = { HOME: home, USERPROFILE: home, SUPERMEMORY_API_URL: stub.url };
+    const input = { session_id: 's-dedup', cwd: repo, prompt: 'continue the database work' };
+
+    const first = JSON.parse((await runHook('recall-directive.js', input, env)).stdout);
+    assert.equal(plain(first.systemMessage), '◪ supermemory · recalled 2 memories');
+
+    const second = JSON.parse((await runHook('recall-directive.js', input, env)).stdout);
+    assert.equal(second.systemMessage, undefined);
+    assert.equal(second.hookSpecificOutput, undefined);
+
+    hits = [...hits, { memory: 'New fact about migrations', similarity: 0.8 }];
+    const third = JSON.parse((await runHook('recall-directive.js', input, env)).stdout);
+    assert.equal(plain(third.systemMessage), '◪ supermemory · recalled 1 new · 2 already in context');
+    assert.match(third.hookSpecificOutput.additionalContext, /New fact about migrations/);
+    assert.doesNotMatch(third.hookSpecificOutput.additionalContext, /Chose Drizzle over Prisma/);
+
+    const state = readState('s-dedup', {
+      dataDir: join(home, '.supermemory-claude', 'statusline'),
+    });
+    assert.equal(state.search.count, 3);
+    assert.equal(state.search.results, 1);
   });
 
   test('a configured recallDirective restores advisory mode verbatim', async (t) => {
@@ -298,7 +341,7 @@ describe('recall-approve hook', () => {
       );
       const output = JSON.parse(stdout);
       assert.equal(output.hookSpecificOutput.permissionDecision, 'allow');
-      assert.equal(output.systemMessage, '◪ supermemory · recalling: auth flow decisions');
+      assert.equal(plain(output.systemMessage), '◪ supermemory · recalling: auth flow decisions');
     }
   });
 
@@ -343,7 +386,7 @@ describe('session-start hook', () => {
     const output = JSON.parse(stdout);
     assert.match(output.hookSpecificOutput.additionalContext, /Uses Bun/);
     assert.match(output.hookSpecificOutput.additionalContext, /Working on statusline/);
-    assert.match(output.systemMessage, /◪ supermemory · 2 memories loaded for Example\.Project/);
+    assert.match(plain(output.systemMessage), /◪ supermemory · 2 memories loaded for Example\.Project/);
     assert.equal(stub.requests[0].url, '/v4/profile');
     assert.match(stub.requests[0].headers.authorization, /^Bearer sm_test/);
 

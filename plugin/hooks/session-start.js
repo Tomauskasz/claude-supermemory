@@ -10,6 +10,7 @@ const {
   getBaseUrl,
   debugLog,
 } = require('./lib/settings');
+const { BRAND, MARK, bold, gray } = require('./lib/colors');
 const { readStdin, writeOutput } = require('./lib/stdin');
 const { startAuthFlow, AUTH_BASE_URL } = require('./lib/auth');
 const { getUserFriendlyError, isBenignError } = require('./lib/error-helpers');
@@ -56,7 +57,7 @@ function statuslineTip() {
       return null;
     }
     fs.writeFileSync(STATUSLINE_TIP_FILE, new Date().toISOString());
-    return `◪ Supermemory status line available — add to ~/.claude/settings.json: "statusLine": {"type": "command", "command": "node ~/.supermemory-claude/statusline-current", "refreshInterval": 1} (refreshInterval keeps it animating while idle).`;
+    return `${MARK} Supermemory status line available — add to ~/.claude/settings.json: "statusLine": {"type": "command", "command": "node ~/.supermemory-claude/statusline-current", "refreshInterval": 1} (refreshInterval keeps it animating while idle).`;
   } catch {
     return null;
   }
@@ -73,7 +74,7 @@ function markTip() {
     if (fs.existsSync(MARK_TIP_FILE)) return null;
     fs.mkdirSync(path.dirname(MARK_TIP_FILE), { recursive: true });
     fs.writeFileSync(MARK_TIP_FILE, new Date().toISOString());
-    return '◪ is the supermemory mark — whenever you see it (statusline, notices, Claude\'s answers), that information came from supermemory.';
+    return `${MARK} is the supermemory mark — whenever you see it (statusline, notices, Claude's answers), that information came from supermemory.`;
   } catch {
     return null;
   }
@@ -196,7 +197,7 @@ Or set the SUPERMEMORY_CC_API_KEY environment variable.
 
     const memoryNotice =
       loaded > 0
-        ? `◪ supermemory · ${loaded} ${loaded === 1 ? 'memory' : 'memories'} loaded for ${projectName}`
+        ? `${BRAND} ${gray('·')} ${loaded} ${loaded === 1 ? 'memory' : 'memories'} loaded for ${bold(projectName)}`
         : null;
 
     output(
@@ -209,7 +210,7 @@ Memories will be saved as you work.
       [
         [memoryNotice, welcomeBackNotice(containerTag)]
           .filter(Boolean)
-          .join(' · ') || null,
+          .join(gray(' · ')) || null,
         markTip(),
         statuslineTip(),
       ],

@@ -1,4 +1,9 @@
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+
 const { getProfile } = require('./lib/api');
+const { BRAND, gray, red } = require('./lib/colors');
 const { getContainerTag } = require('./lib/container-tag');
 const { loadProjectConfig } = require('./lib/project-config');
 const {
@@ -8,7 +13,12 @@ const {
   debugLog,
   getRecallConfig,
 } = require('./lib/settings');
-const { readState, writeState } = require('./lib/statusline-state');
+const {
+  atomicWriteJson,
+  getSessionDir,
+  readState,
+  writeState,
+} = require('./lib/statusline-state');
 const { readStdin, writeOutput } = require('./lib/stdin');
 
 // Recall is performed HERE, not delegated to the model: the hook searches
@@ -21,6 +31,7 @@ const MAX_RESULTS = 5;
 const MAX_RESULT_CHARS = 300;
 const MIN_SIMILARITY = 0.55;
 const SEARCH_TIMEOUT_MS = 4000;
+const MAX_SEEN_HASHES = 500;
 
 function shouldSkip(prompt) {
   if (prompt.length < MIN_PROMPT_LENGTH) return true;
@@ -35,6 +46,31 @@ function resultText(r) {
     (v) => typeof v === 'string' && v.trim(),
   );
   return text || null;
+}
+
+// A memory injected once this session stays in the conversation, so
+// re-injecting it wastes context and makes the banner repeat the same
+// number every turn. The seen set lives next to the statusline state and
+// is pruned with it.
+function hashText(text) {
+  return crypto
+    .createHash('sha256')
+    .update(text.replace(/\s+/g, ' ').trim())
+    .digest('hex')
+    .slice(0, 16);
+}
+
+function readSeenHashes(sessionDir) {
+  try {
+    const list = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, 'recalled.json'), 'utf8'),
+    );
+    return Array.isArray(list)
+      ? list.filter((h) => typeof h === 'string')
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function formatRecall(results, containerTag) {
@@ -97,32 +133,56 @@ async function main() {
       .filter((r) => !Number.isFinite(r.similarity) || r.similarity >= MIN_SIMILARITY)
       .slice(0, MAX_RESULTS);
 
+    const sessionDir = getSessionDir(input.session_id);
+    const seen = sessionDir ? readSeenHashes(sessionDir) : [];
+    const seenSet = new Set(seen);
+    const fresh = results.filter((r) => !seenSet.has(hashText(resultText(r))));
+    const repeats = results.length - fresh.length;
+
     if (input.session_id) {
       const recalls = readState(input.session_id).search?.count || 0;
       writeState(input.session_id, 'search', {
-        results: results.length,
+        results: fresh.length,
         count: recalls + 1,
       });
     }
 
-    debugLog(settings, 'Prompt recall', { query: prompt.slice(0, 80), hits: results.length });
+    debugLog(settings, 'Prompt recall', {
+      query: prompt.slice(0, 80),
+      hits: results.length,
+      fresh: fresh.length,
+    });
 
-    if (results.length === 0) {
+    if (fresh.length === 0) {
       writeOutput({ continue: true, suppressOutput: true });
       return;
     }
 
+    if (sessionDir) {
+      try {
+        atomicWriteJson(
+          path.join(sessionDir, 'recalled.json'),
+          [...seen, ...fresh.map((r) => hashText(resultText(r)))].slice(-MAX_SEEN_HASHES),
+        );
+      } catch {
+        // Dedup is best effort; recall itself must still go through.
+      }
+    }
+
+    const label = repeats
+      ? `recalled ${fresh.length} new${gray(` · ${repeats} already in context`)}`
+      : `recalled ${fresh.length} ${fresh.length === 1 ? 'memory' : 'memories'}`;
     writeOutput({
-      systemMessage: `◪ supermemory · recalled ${results.length} ${results.length === 1 ? 'memory' : 'memories'}`,
+      systemMessage: `${BRAND} ${gray('·')} ${label}`,
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: formatRecall(results, containerTag),
+        additionalContext: formatRecall(fresh, containerTag),
       },
     });
   } catch (err) {
     debugLog(settings, 'Recall directive error', { error: err.message });
     writeOutput({
-      systemMessage: `◪ supermemory · recall failed: ${err.message.slice(0, 80)}`,
+      systemMessage: `${BRAND} ${gray('·')} ${red(`recall failed: ${err.message.slice(0, 80)}`)}`,
       continue: true,
       suppressOutput: true,
     });

@@ -1,3 +1,4 @@
+const { BRAND, gray } = require('./lib/colors');
 const { loadSettings, debugLog } = require('./lib/settings');
 const { readState, writeState } = require('./lib/statusline-state');
 const { readStdin, writeOutput } = require('./lib/stdin');
@@ -37,8 +38,8 @@ async function main() {
       }
       writeOutput({
         systemMessage: query
-          ? `◪ supermemory · recalling: ${query}`
-          : '◪ supermemory · recalling memories',
+          ? `${BRAND} ${gray('·')} recalling: ${query}`
+          : `${BRAND} ${gray('·')} recalling memories`,
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'allow',
