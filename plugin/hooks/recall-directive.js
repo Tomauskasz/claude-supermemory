@@ -27,10 +27,21 @@ function shouldSkip(prompt) {
   return ['/', '!', '#'].includes(prompt[0]);
 }
 
-function formatRecall(results, containerTag) {
-  const lines = results.map(
-    (r) => `- ◪ ${r.memory.replace(/\s+/g, ' ').slice(0, MAX_RESULT_CHARS)}`,
+// Search hits are memory-shaped (.memory) or document/chunk-shaped
+// (.chunk/.content/.text, usually with a filepath) — read whichever carries
+// the text.
+function resultText(r) {
+  const text = [r?.memory, r?.chunk, r?.content, r?.text].find(
+    (v) => typeof v === 'string' && v.trim(),
   );
+  return text || null;
+}
+
+function formatRecall(results, containerTag) {
+  const lines = results.map((r) => {
+    const text = resultText(r).replace(/\s+/g, ' ').slice(0, MAX_RESULT_CHARS);
+    return `- ◪ ${text}${typeof r.filepath === 'string' && r.filepath ? ` (${r.filepath})` : ''}`;
+  });
   return `<supermemory-recall>
 ◪ Recalled from supermemory for this prompt (relevance-ranked):
 ${lines.join('\n')}
@@ -82,7 +93,7 @@ async function main() {
     );
 
     const results = (response?.searchResults?.results || [])
-      .filter((r) => typeof r?.memory === 'string' && r.memory.trim())
+      .filter((r) => resultText(r))
       .filter((r) => !Number.isFinite(r.similarity) || r.similarity >= MIN_SIMILARITY)
       .slice(0, MAX_RESULTS);
 
