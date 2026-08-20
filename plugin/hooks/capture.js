@@ -13,9 +13,12 @@ const {
   getSignalConfig,
 } = require('./lib/settings');
 const { readStdin, writeOutput } = require('./lib/stdin');
+const { normalizeHookInput } = require('./lib/hook-input');
 const {
+  formatGrokEntries,
   formatNewEntries,
   formatSignalEntries,
+  isGrokTranscript,
   setLastCapturedUuid,
 } = require('./lib/transcript');
 const { getUserFriendlyError } = require('./lib/error-helpers');
@@ -27,7 +30,7 @@ async function main() {
   let sessionId;
 
   try {
-    const input = await readStdin();
+    const input = normalizeHookInput(await readStdin());
     const cwd = input.cwd || process.cwd();
     sessionId = input.session_id;
     const transcriptPath = input.transcript_path;
@@ -46,9 +49,11 @@ async function main() {
       return;
     }
 
-    const delta = getSignalConfig(cwd).enabled
-      ? formatSignalEntries(transcriptPath, sessionId, cwd)
-      : formatNewEntries(transcriptPath, sessionId, cwd);
+    const delta = isGrokTranscript(transcriptPath)
+      ? formatGrokEntries(transcriptPath, sessionId)
+      : getSignalConfig(cwd).enabled
+        ? formatSignalEntries(transcriptPath, sessionId, cwd)
+        : formatNewEntries(transcriptPath, sessionId, cwd);
 
     if (!delta) {
       debugLog(settings, 'No new content to save');

@@ -294,6 +294,98 @@ describe('recall-directive hook', () => {
   });
 });
 
+describe('grok compatibility', () => {
+  test('recall handles Grok payloads: camelCase keys, wrapped prompt, first-recall profile', async (t) => {
+    const { repo, home } = makeRepo(t);
+    mkdirSync(join(home, '.supermemory-claude'), { recursive: true });
+    writeFileSync(
+      join(home, '.supermemory-claude', 'credentials.json'),
+      JSON.stringify({ apiKey: 'sm_test_key_0123456789abcdef' }),
+    );
+    const stub = await startStubServer(t, (record, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(
+        JSON.stringify({
+          profile: { static: ['Prefers Bun'], dynamic: ['Working on Grok support'] },
+          searchResults: {
+            results: [{ memory: 'Chose Drizzle over Prisma', similarity: 0.82 }],
+          },
+        }),
+      );
+    });
+    const env = { HOME: home, USERPROFILE: home, SUPERMEMORY_API_URL: stub.url };
+    const grokInput = {
+      hookEventName: 'user_prompt_submit',
+      sessionId: 'grok-sess-1',
+      cwd: repo,
+      transcriptPath: '/tmp/nonexistent/updates.jsonl',
+      prompt: '<user_query>\ncontinue the database work from before\n</user_query>',
+    };
+
+    const first = await runHook('recall-directive.js', grokInput, env);
+    const output = JSON.parse(first.stdout);
+    const context = output.hookSpecificOutput.additionalContext;
+    assert.equal(
+      JSON.parse(stub.requests[0].body).q,
+      'continue the database work from before',
+    );
+    assert.match(context, /- ◪ Prefers Bun/);
+    assert.match(context, /- ◪ Working on Grok support/);
+    assert.match(context, /- ◪ Chose Drizzle over Prisma/);
+    assert.match(plain(output.systemMessage), /profile loaded · recalled 1 memory/);
+    assert.match(plain(first.stderr), /◪ supermemory/);
+
+    const second = JSON.parse((await runHook('recall-directive.js', grokInput, env)).stdout);
+    assert.equal(second.hookSpecificOutput, undefined);
+  });
+
+  test('capture reads Grok chat_history with a line-count cursor', async (t) => {
+    const { repo, home } = makeRepo(t);
+    mkdirSync(join(home, '.supermemory-claude'), { recursive: true });
+    writeFileSync(
+      join(home, '.supermemory-claude', 'credentials.json'),
+      JSON.stringify({ apiKey: 'sm_test_key_0123456789abcdef' }),
+    );
+    const sessionDir = makeTempDir(t, 'grok-session');
+    writeFileSync(join(sessionDir, 'updates.jsonl'), '');
+    writeFileSync(
+      join(sessionDir, 'chat_history.jsonl'),
+      [
+        JSON.stringify({ type: 'system', content: 'You are Grok.' }),
+        JSON.stringify({
+          type: 'user',
+          content: '<user_query>\nPlease fix the statusline symlink handling\n</user_query>',
+        }),
+        JSON.stringify({ type: 'reasoning', content: 'thinking...' }),
+        JSON.stringify({ type: 'assistant', content: 'Fixed: the symlink now re-points each session.' }),
+      ].join('\n'),
+    );
+    const stub = await startStubServer(t, (record, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ id: 'doc_g1' }));
+    });
+    const env = { HOME: home, USERPROFILE: home, SUPERMEMORY_API_URL: stub.url };
+    const grokInput = {
+      hookEventName: 'stop',
+      sessionId: 'grok-sess-2',
+      cwd: repo,
+      transcriptPath: join(sessionDir, 'updates.jsonl'),
+      reason: 'end_turn',
+    };
+
+    await runHook('capture.js', grokInput, env);
+    assert.equal(stub.requests.length, 1);
+    const body = JSON.parse(stub.requests[0].body);
+    assert.match(body.content, /fix the statusline symlink/);
+    assert.match(body.content, /re-points each session/);
+    assert.doesNotMatch(body.content, /<user_query>/);
+    assert.doesNotMatch(body.content, /thinking/);
+
+    await runHook('capture.js', grokInput, env);
+    assert.equal(stub.requests.length, 1, 'cursor should prevent recapture');
+  });
+});
+
 describe('stdin handling', () => {
   test('hooks finish even when stdin never emits end (issue #25)', async (t) => {
     const home = makeTempDir(t, 'stdin-home');

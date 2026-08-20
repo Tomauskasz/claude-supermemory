@@ -494,12 +494,49 @@ function formatNewEntries(transcriptPath, sessionId, cwd) {
   return { formatted: result, lastUuid: lastEntry.uuid };
 }
 
+// Grok Build hooks point transcriptPath at the session's updates.jsonl (ACP
+// event records); the readable conversation lives in the sibling
+// chat_history.jsonl as {type, content} lines. Entries have no uuids, so the
+// cursor stores a processed-line count instead.
+function isGrokTranscript(transcriptPath) {
+  return path.basename(transcriptPath || '') === 'updates.jsonl';
+}
+
+function formatGrokEntries(transcriptPath, sessionId) {
+  const chatHistory = path.join(path.dirname(transcriptPath), 'chat_history.jsonl');
+  const convo = parseTranscript(chatHistory).filter(
+    (e) =>
+      (e.type === 'user' || e.type === 'assistant') &&
+      typeof e.content === 'string' &&
+      e.content.trim(),
+  );
+
+  const cursor = getLastCapturedUuid(sessionId);
+  const start =
+    cursor?.startsWith('grok:') ? Number.parseInt(cursor.slice(5), 10) || 0 : 0;
+  const fresh = convo.slice(start);
+  if (fresh.length === 0) return null;
+
+  const parts = [`<|turn_start|>${new Date().toISOString()}`];
+  for (const entry of fresh) {
+    const text = cleanContent(entry.content.replace(/<\/?user_query>/g, ''));
+    if (text) parts.push(`<|start|>${entry.type}<|message|>${text}<|end|>`);
+  }
+  parts.push('<|turn_end|>');
+
+  const result = parts.join('\n\n');
+  if (result.length < 100) return null;
+  return { formatted: result, lastUuid: `grok:${convo.length}` };
+}
+
 module.exports = {
   parseTranscript,
   getEntriesSinceLastCapture,
   formatEntry,
   formatNewEntries,
   formatSignalEntries,
+  formatGrokEntries,
+  isGrokTranscript,
   cleanContent,
   truncate,
   getLastCapturedUuid,

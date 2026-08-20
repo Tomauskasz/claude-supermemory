@@ -4,6 +4,7 @@ const path = require('node:path');
 
 const { getProfile } = require('./lib/api');
 const { BRAND, gray, red } = require('./lib/colors');
+const { normalizeHookInput } = require('./lib/hook-input');
 const { getContainerTag } = require('./lib/container-tag');
 const { loadProjectConfig } = require('./lib/project-config');
 const {
@@ -73,17 +74,28 @@ function readSeenHashes(sessionDir) {
   }
 }
 
-function formatRecall(results, containerTag) {
+// Grok Build does not run plugin SessionStart hooks, so the first recall of a
+// session also carries the profile that session-start would have injected —
+// the /v4/profile response already contains both, costing no extra call.
+function formatProfile(profile) {
+  const items = [...(profile?.static || []), ...(profile?.dynamic || [])];
+  if (items.length === 0) return '';
+  return `\nUser profile from supermemory:\n${items.map((f) => `- ◪ ${f}`).join('\n')}\n`;
+}
+
+function formatRecall(results, containerTag, profileBlock = '') {
   const lines = results.map((r) => {
     const text = resultText(r).replace(/\s+/g, ' ').slice(0, MAX_RESULT_CHARS);
     const title = typeof r.title === 'string' && r.title.trim() ? r.title.trim() : null;
     const prefix = title && !text.startsWith(title) ? `${title} — ` : '';
     return `- ◪ ${prefix}${text}${typeof r.filepath === 'string' && r.filepath ? ` (${r.filepath})` : ''}`;
   });
+  const recallSection =
+    lines.length > 0
+      ? `◪ Recalled from supermemory for this prompt (relevance-ranked):\n${lines.join('\n')}\n`
+      : '';
   return `<supermemory-recall>
-◪ Recalled from supermemory for this prompt (relevance-ranked):
-${lines.join('\n')}
-
+${profileBlock}${recallSection}
 When one of these shapes your answer, credit it naturally with the ◪ prefix (e.g. "◪ earlier you decided X"); if you name the source, say "from supermemory" — never "from memory". For deeper history, call the supermemory search_memory tool (containerTag: "${containerTag}") or launch the context-gatherer agent.
 </supermemory-recall>`;
 }
@@ -92,9 +104,9 @@ async function main() {
   const settings = loadSettings();
 
   try {
-    const input = await readStdin();
+    const input = normalizeHookInput(await readStdin());
     const cwd = input.cwd || process.cwd();
-    const prompt = (input.prompt || '').trim();
+    const prompt = input.prompt.trim();
     const { directive } = getRecallConfig(cwd);
 
     if (directive) {
@@ -141,6 +153,19 @@ async function main() {
     const fresh = results.filter((r) => !seenSet.has(hashText(resultText(r))));
     const repeats = results.length - fresh.length;
 
+    const needsProfile =
+      input.isGrok && input.session_id && !readState(input.session_id).context;
+    const profileBlock = needsProfile ? formatProfile(response?.profile) : '';
+    if (needsProfile) {
+      const loaded =
+        (response?.profile?.static?.length || 0) +
+        (response?.profile?.dynamic?.length || 0);
+      writeState(input.session_id, 'context', {
+        status: 'ready',
+        memoryItemsLoaded: loaded,
+      });
+    }
+
     if (input.session_id) {
       const recalls = readState(input.session_id).search?.count || 0;
       writeState(input.session_id, 'search', {
@@ -155,7 +180,7 @@ async function main() {
       fresh: fresh.length,
     });
 
-    if (fresh.length === 0) {
+    if (fresh.length === 0 && !profileBlock) {
       writeOutput({ continue: true, suppressOutput: true });
       return;
     }
@@ -171,14 +196,24 @@ async function main() {
       }
     }
 
-    const label = repeats
-      ? `recalled ${fresh.length} new${gray(` · ${repeats} already in context`)}`
-      : `recalled ${fresh.length} ${fresh.length === 1 ? 'memory' : 'memories'}`;
+    const parts = [];
+    if (profileBlock) parts.push('profile loaded');
+    if (fresh.length > 0) {
+      parts.push(
+        repeats
+          ? `recalled ${fresh.length} new${gray(` · ${repeats} already in context`)}`
+          : `recalled ${fresh.length} ${fresh.length === 1 ? 'memory' : 'memories'}`,
+      );
+    }
+    const banner = `${BRAND} ${gray('·')} ${parts.join(gray(' · '))}`;
+    // Grok renders neither systemMessage nor (verified) any hook stdout text;
+    // stderr is the visibility channel there. Harmless under Claude Code.
+    if (input.isGrok) console.error(banner);
     writeOutput({
-      systemMessage: `${BRAND} ${gray('·')} ${label}`,
+      systemMessage: banner,
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: formatRecall(fresh, containerTag),
+        additionalContext: formatRecall(fresh, containerTag, profileBlock),
       },
     });
   } catch (err) {

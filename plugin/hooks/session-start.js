@@ -11,6 +11,7 @@ const {
   debugLog,
 } = require('./lib/settings');
 const { BRAND, MARK, bold, gray } = require('./lib/colors');
+const { normalizeHookInput } = require('./lib/hook-input');
 const { readStdin, writeOutput } = require('./lib/stdin');
 const { startAuthFlow, AUTH_BASE_URL } = require('./lib/auth');
 const { getUserFriendlyError, isBenignError } = require('./lib/error-helpers');
@@ -135,7 +136,7 @@ async function main() {
   let sessionId;
 
   try {
-    const input = await readStdin();
+    const input = normalizeHookInput(await readStdin());
     sessionId = input.session_id;
     const cwd = input.cwd || process.cwd();
 
