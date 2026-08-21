@@ -1,5 +1,5 @@
 {
-  "description": "Supermemory: persistent memory for Claude Code",
+  "description": "Supermemory: persistent memory for Claude Code. Injection hooks (SessionStart, UserPromptSubmit, PreToolUse) must stay synchronous — async hooks' output is discarded, which would silently kill context injection and auto-approval. They fail open instead: every network call is capped at 3s and the hook timeout is a backstop, so a dead network never stalls the session. Capture has no output anyone reads, so it runs async.",
   "hooks": {
     "SessionStart": [
       {
@@ -18,7 +18,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/recall-directive.js\"",
-            "timeout": 10
+            "timeout": 5
           }
         ]
       }
@@ -30,7 +30,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/recall-approve.js\"",
-            "timeout": 10
+            "timeout": 5
           }
         ]
       }
@@ -41,6 +41,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/capture.js\"",
+            "async": true,
             "timeout": 30
           }
         ]

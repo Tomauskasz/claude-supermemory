@@ -5,6 +5,7 @@ const path = require('node:path');
 const { getProfile } = require('./lib/api');
 const { BRAND, gray, red } = require('./lib/colors');
 const { getContainerTag } = require('./lib/container-tag');
+const { getUserFriendlyError } = require('./lib/error-helpers');
 const { loadProjectConfig } = require('./lib/project-config');
 const {
   loadSettings,
@@ -30,7 +31,7 @@ const MAX_QUERY_LENGTH = 500;
 const MAX_RESULTS = 5;
 const MAX_RESULT_CHARS = 300;
 const MIN_SIMILARITY = 0.55;
-const SEARCH_TIMEOUT_MS = 4000;
+const SEARCH_TIMEOUT_MS = 3000;
 const MAX_SEEN_HASHES = 500;
 
 function shouldSkip(prompt) {
@@ -171,20 +172,23 @@ async function main() {
       }
     }
 
+    const context = formatRecall(fresh, containerTag);
+    // ~4 chars/token: close enough to show what the injection costs.
+    const tok = gray(`(${Math.round(context.length / 4)} tok)`);
     const label = repeats
-      ? `recalled ${fresh.length} new${gray(` · ${repeats} already in context`)}`
-      : `recalled ${fresh.length} ${fresh.length === 1 ? 'memory' : 'memories'}`;
+      ? `recalled ${fresh.length} new ${tok}${gray(` · ${repeats} already in context`)}`
+      : `recalled ${fresh.length} ${fresh.length === 1 ? 'memory' : 'memories'} ${tok}`;
     writeOutput({
       systemMessage: `${BRAND} ${gray('·')} ${label}`,
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: formatRecall(fresh, containerTag),
+        additionalContext: context,
       },
     });
   } catch (err) {
     debugLog(settings, 'Recall directive error', { error: err.message });
     writeOutput({
-      systemMessage: `${BRAND} ${gray('·')} ${red(`recall failed: ${err.message.slice(0, 80)}`)}`,
+      systemMessage: `${BRAND} ${gray('·')} ${red(`recall failed: ${getUserFriendlyError(err).slice(0, 80)}`)}`,
       continue: true,
       suppressOutput: true,
     });

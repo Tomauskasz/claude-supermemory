@@ -206,7 +206,7 @@ describe('recall-directive hook', () => {
     assert.match(context, /- ◪ Migration plan — Use expand-contract migrations/);
     assert.doesNotMatch(context, /irrelevant low-similarity hit/);
     assert.match(context, /repo_example_project__/);
-    assert.match(plain(output.systemMessage), /^◪ supermemory · recalled \d+ memories$/);
+    assert.match(plain(output.systemMessage), /^◪ supermemory · recalled \d+ memories \(\d+ tok\)$/);
     assert.equal(stub.requests[0].url, '/v4/profile');
     assert.equal(
       JSON.parse(stub.requests[0].body).q,
@@ -258,7 +258,7 @@ describe('recall-directive hook', () => {
     const input = { session_id: 's-dedup', cwd: repo, prompt: 'continue the database work' };
 
     const first = JSON.parse((await runHook('recall-directive.js', input, env)).stdout);
-    assert.equal(plain(first.systemMessage), '◪ supermemory · recalled 2 memories');
+    assert.match(plain(first.systemMessage), /^◪ supermemory · recalled 2 memories \(\d+ tok\)$/);
 
     const second = JSON.parse((await runHook('recall-directive.js', input, env)).stdout);
     assert.equal(second.systemMessage, undefined);
@@ -266,7 +266,7 @@ describe('recall-directive hook', () => {
 
     hits = [...hits, { memory: 'New fact about migrations', similarity: 0.8 }];
     const third = JSON.parse((await runHook('recall-directive.js', input, env)).stdout);
-    assert.equal(plain(third.systemMessage), '◪ supermemory · recalled 1 new · 2 already in context');
+    assert.match(plain(third.systemMessage), /^◪ supermemory · recalled 1 new \(\d+ tok\) · 2 already in context$/);
     assert.match(third.hookSpecificOutput.additionalContext, /New fact about migrations/);
     assert.doesNotMatch(third.hookSpecificOutput.additionalContext, /Chose Drizzle over Prisma/);
 

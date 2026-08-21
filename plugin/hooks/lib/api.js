@@ -20,7 +20,12 @@ SKIP:
 - Transient command output and low-value implementation chatter
 - Granular details that do not help future work`;
 
-async function post(baseUrl, apiKey, path, body, timeoutMs = 15000) {
+// Hooks sit between the user and Claude — a slow or dead network must never
+// hold the session hostage, so every request is capped hard at 3s and callers
+// treat failure as "no memory this time", not a blocker.
+const REQUEST_TIMEOUT_MS = 3000;
+
+async function post(baseUrl, apiKey, path, body, timeoutMs = REQUEST_TIMEOUT_MS) {
   const response = await fetch(`${baseUrl.replace(/\/+$/, '')}${path}`, {
     method: 'POST',
     headers: {
