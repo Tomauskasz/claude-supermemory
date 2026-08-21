@@ -136,7 +136,13 @@ function getStatus(state, now) {
     savedAt = capture.updatedAt;
   }
   if (search?.count > 0 && search.updatedAt >= generation) {
-    parts.push(`${search.count} ${search.count === 1 ? 'recall' : 'recalls'}`);
+    // Memories in context beats event counts; MCP-tool searches inject
+    // nothing trackable, so those sessions fall back to the recall tally.
+    parts.push(
+      search.memories > 0
+        ? `${search.memories} recalled`
+        : `${search.count} ${search.count === 1 ? 'recall' : 'recalls'}`,
+    );
     recalledAt = search.updatedAt;
   }
 

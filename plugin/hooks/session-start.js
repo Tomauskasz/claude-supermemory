@@ -13,7 +13,7 @@ const {
 const { BRAND, MARK, bold, gray } = require('./lib/colors');
 const { readStdin, writeOutput } = require('./lib/stdin');
 const { startAuthFlow, AUTH_BASE_URL } = require('./lib/auth');
-const { getUserFriendlyError, isBenignError } = require('./lib/error-helpers');
+const { getUserFriendlyError } = require('./lib/error-helpers');
 const { LAST_SESSION_FILE } = require('./lib/last-session');
 const {
   pruneState,
@@ -207,7 +207,9 @@ Or set the SUPERMEMORY_CC_API_KEY environment variable.
     try {
       profileResult = await getProfile(baseUrl, apiKey, containerTag, projectName);
     } catch (err) {
-      if (!isBenignError(err)) apiError = getUserFriendlyError(err);
+      // Fail open, but never silently: a network failure must not be dressed
+      // up as "this project has no memories". Only 404 means genuinely empty.
+      if (err?.status !== 404) apiError = getUserFriendlyError(err);
       debugLog(settings, 'Profile fetch failed', { error: err.message });
     }
 
@@ -234,10 +236,14 @@ Or set the SUPERMEMORY_CC_API_KEY environment variable.
     output(
       (apiError ? `<supermemory-status>\n${apiError}\n</supermemory-status>\n` : '') +
         (context ||
-          `<supermemory-context>
+          (apiError
+            ? `<supermemory-context>
+Memory could not be loaded this session — do not assume this project has no memories.
+</supermemory-context>`
+            : `<supermemory-context>
 No previous memories found for this project (container: ${containerTag}).
 Memories will be saved as you work.
-</supermemory-context>`),
+</supermemory-context>`)),
       [
         [memoryNotice, welcomeBackNotice(containerTag)]
           .filter(Boolean)

@@ -33,8 +33,12 @@ async function main() {
           ? input.tool_input.query
           : null;
       if (tool === 'search_memory') {
-        const recalls = readState(input.session_id).search?.count || 0;
-        writeState(input.session_id, 'search', { results: 0, count: recalls + 1 });
+        const prev = readState(input.session_id).search || {};
+        writeState(input.session_id, 'search', {
+          results: 0,
+          count: (prev.count || 0) + 1,
+          memories: prev.memories || 0,
+        });
       }
       writeOutput({
         systemMessage: query

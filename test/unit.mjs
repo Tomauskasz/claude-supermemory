@@ -206,7 +206,7 @@ describe('recall-directive hook', () => {
     assert.match(context, /- ◪ Migration plan — Use expand-contract migrations/);
     assert.doesNotMatch(context, /irrelevant low-similarity hit/);
     assert.match(context, /repo_example_project__/);
-    assert.match(plain(output.systemMessage), /^◪ supermemory · recalled \d+ memories$/);
+    assert.match(plain(output.systemMessage), /^◪ supermemory · recalled \d+ memories \(\d+ tok\)$/);
     assert.equal(stub.requests[0].url, '/v4/profile');
     assert.equal(
       JSON.parse(stub.requests[0].body).q,
@@ -218,6 +218,7 @@ describe('recall-directive hook', () => {
     });
     assert.equal(state.search.count, 1);
     assert.equal(state.search.results, 4);
+    assert.equal(state.search.memories, 4);
   });
 
   test('skips trivial prompts and slash commands without an API call', async (t) => {
@@ -258,7 +259,7 @@ describe('recall-directive hook', () => {
     const input = { session_id: 's-dedup', cwd: repo, prompt: 'continue the database work' };
 
     const first = JSON.parse((await runHook('recall-directive.js', input, env)).stdout);
-    assert.equal(plain(first.systemMessage), '◪ supermemory · recalled 2 memories');
+    assert.match(plain(first.systemMessage), /^◪ supermemory · recalled 2 memories \(\d+ tok\)$/);
 
     const second = JSON.parse((await runHook('recall-directive.js', input, env)).stdout);
     assert.equal(second.systemMessage, undefined);
@@ -266,7 +267,7 @@ describe('recall-directive hook', () => {
 
     hits = [...hits, { memory: 'New fact about migrations', similarity: 0.8 }];
     const third = JSON.parse((await runHook('recall-directive.js', input, env)).stdout);
-    assert.equal(plain(third.systemMessage), '◪ supermemory · recalled 1 new · 2 already in context');
+    assert.match(plain(third.systemMessage), /^◪ supermemory · recalled 1 new \(\d+ tok\) · 2 already in context$/);
     assert.match(third.hookSpecificOutput.additionalContext, /New fact about migrations/);
     assert.doesNotMatch(third.hookSpecificOutput.additionalContext, /Chose Drizzle over Prisma/);
 
@@ -275,6 +276,7 @@ describe('recall-directive hook', () => {
     });
     assert.equal(state.search.count, 3);
     assert.equal(state.search.results, 1);
+    assert.equal(state.search.memories, 3);
   });
 
   test('a configured recallDirective restores advisory mode verbatim', async (t) => {
@@ -664,6 +666,17 @@ describe('statusline rendering', () => {
         now + 20,
       ),
       '3 loaded · 1 recall',
+    );
+    // With injected memories tracked, the tally counts memories, not events.
+    assert.equal(
+      getStatusLabel(
+        {
+          context,
+          search: { results: 4, count: 2, memories: 9, updatedAt: now + 12 },
+        },
+        now + 20,
+      ),
+      '3 loaded · 9 recalled',
     );
     assert.equal(
       renderStatusline({ context }, { now, color: false }),

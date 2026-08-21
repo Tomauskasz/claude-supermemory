@@ -15,6 +15,13 @@
 function getUserFriendlyError(err) {
   const status = err?.status;
 
+  if (
+    err?.name === 'TimeoutError' ||
+    err?.name === 'AbortError' ||
+    err?.message === 'fetch failed'
+  ) {
+    return 'Supermemory unreachable (network) — continuing without memory.';
+  }
   if (status === 400) {
     return 'Bad request \u2014 your API key or request format may be invalid. Check your key at https://console.supermemory.ai';
   }
