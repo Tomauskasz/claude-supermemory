@@ -89,7 +89,11 @@ function sanitizeEvent(event, data) {
     return { status, count: normalizeCount(data.count) };
   }
 
-  return { results: normalizeCount(data.results), count: normalizeCount(data.count) };
+  return {
+    results: normalizeCount(data.results),
+    count: normalizeCount(data.count),
+    memories: normalizeCount(data.memories),
+  };
 }
 
 function writeState(sessionId, event, data = {}, options = {}) {

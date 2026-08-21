@@ -218,6 +218,7 @@ describe('recall-directive hook', () => {
     });
     assert.equal(state.search.count, 1);
     assert.equal(state.search.results, 4);
+    assert.equal(state.search.memories, 4);
   });
 
   test('skips trivial prompts and slash commands without an API call', async (t) => {
@@ -275,6 +276,7 @@ describe('recall-directive hook', () => {
     });
     assert.equal(state.search.count, 3);
     assert.equal(state.search.results, 1);
+    assert.equal(state.search.memories, 3);
   });
 
   test('a configured recallDirective restores advisory mode verbatim', async (t) => {
@@ -664,6 +666,17 @@ describe('statusline rendering', () => {
         now + 20,
       ),
       '3 loaded · 1 recall',
+    );
+    // With injected memories tracked, the tally counts memories, not events.
+    assert.equal(
+      getStatusLabel(
+        {
+          context,
+          search: { results: 4, count: 2, memories: 9, updatedAt: now + 12 },
+        },
+        now + 20,
+      ),
+      '3 loaded · 9 recalled',
     );
     assert.equal(
       renderStatusline({ context }, { now, color: false }),

@@ -143,10 +143,11 @@ async function main() {
     const repeats = results.length - fresh.length;
 
     if (input.session_id) {
-      const recalls = readState(input.session_id).search?.count || 0;
+      const prev = readState(input.session_id).search || {};
       writeState(input.session_id, 'search', {
         results: fresh.length,
-        count: recalls + 1,
+        count: (prev.count || 0) + 1,
+        memories: (prev.memories || 0) + fresh.length,
       });
     }
 
