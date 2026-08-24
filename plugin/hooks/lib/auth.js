@@ -98,6 +98,16 @@ function clearCredentials() {
   } catch {}
 }
 
+function createBrowserAuthUrl(callbackUrl, mode) {
+  const authUrl = new URL(AUTH_BASE_URL);
+  authUrl.searchParams.set('callback', callbackUrl.toString());
+  authUrl.searchParams.set('client', 'claude_code');
+  if (mode === 'switch_organization') {
+    authUrl.searchParams.set('mode', mode);
+  }
+  return authUrl;
+}
+
 function startAuthFlow(options = {}) {
   return new Promise((resolve, reject) => {
     const persist = options.persist !== false;
@@ -164,9 +174,7 @@ function startAuthFlow(options = {}) {
         `/callback?state=${expectedState}`,
         `http://127.0.0.1:${address.port}`,
       );
-      const authUrl = new URL(AUTH_BASE_URL);
-      authUrl.searchParams.set('callback', callbackUrl.toString());
-      authUrl.searchParams.set('client', 'claude_code');
+      const authUrl = createBrowserAuthUrl(callbackUrl, options.mode);
 
       Promise.resolve(opener(authUrl)).catch((error) => {
         finish(new Error(`Failed to open browser: ${error.message}`));
@@ -189,6 +197,7 @@ module.exports = {
   loadCredentials,
   saveCredentials,
   clearCredentials,
+  createBrowserAuthUrl,
   startAuthFlow,
   openUrl,
 };

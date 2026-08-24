@@ -31,7 +31,10 @@ const {
   getStatusLabel,
   renderStatusline,
 } = require('../plugin/statusline.js');
-const { startAuthFlow } = require('../plugin/hooks/lib/auth.js');
+const {
+  createBrowserAuthUrl,
+  startAuthFlow,
+} = require('../plugin/hooks/lib/auth.js');
 const {
   getOrganization,
   getOverrideWarnings,
@@ -146,6 +149,20 @@ function makeAuthedHome(t, apiKey = 'sm_test_key_0123456789abcdef') {
 }
 
 describe('organization switching', () => {
+  test('adds switch intent only to organization-switch auth URLs', () => {
+    const callbackUrl = new URL(
+      'http://127.0.0.1:43210/callback?state=expected',
+    );
+    assert.equal(createBrowserAuthUrl(callbackUrl).searchParams.get('mode'), null);
+    assert.equal(
+      createBrowserAuthUrl(
+        callbackUrl,
+        'switch_organization',
+      ).searchParams.get('mode'),
+      'switch_organization',
+    );
+  });
+
   test('browser auth uses an ephemeral, state-protected callback', async () => {
     const candidateKey = 'sm_selected_org_0123456789abcdef';
     let callbackHandler;
@@ -162,6 +179,7 @@ describe('organization switching', () => {
 
     const auth = startAuthFlow({
       persist: false,
+      mode: 'switch_organization',
       timeoutMs: 2000,
       createServer: (handler) => {
         callbackHandler = handler;
@@ -178,6 +196,10 @@ describe('organization switching', () => {
       },
       openUrl: (authUrl) => {
         browserFlow = (async () => {
+          assert.equal(
+            authUrl.searchParams.get('mode'),
+            'switch_organization',
+          );
           const callback = new URL(authUrl.searchParams.get('callback'));
           assert.equal(callback.hostname, '127.0.0.1');
           assert.match(callback.port, /^\d+$/);

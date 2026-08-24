@@ -57,7 +57,12 @@ async function switchOrganization(options = {}) {
       : options.projectConfig;
   const baseUrl = options.baseUrl || getBaseUrl(cwd, projectConfig);
   const authenticate =
-    options.authenticate || (() => startAuthFlow({ persist: false }));
+    options.authenticate ||
+    (() =>
+      startAuthFlow({
+        persist: false,
+        mode: 'switch_organization',
+      }));
   const verify =
     options.verify ||
     ((url, apiKey) =>
