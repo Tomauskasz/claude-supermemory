@@ -42,8 +42,8 @@ export SUPERMEMORY_CC_API_KEY="sm_..."
 ## How It Works
 
 - **Reasoned recall** — Before each turn, Claude decides whether recalling memory would actually help your current message, and only searches when it's worth it — every turn, once in a while, or not at all. The search runs automatically (no permission prompt), just like auto-capture. Searching only when needed also keeps more usage on your plan
-- **supermemory-search** — Ask about past work or previous sessions, Claude searches your memories
-- **supermemory-save** — Ask to save something important, Claude saves it for the team
+- **`/supermemory:search`** — Search past work, previous sessions, and saved project context
+- **`/supermemory:save`** — Save important project knowledge for future sessions
 
 ### Shared Agents memory
 
@@ -68,6 +68,8 @@ write destination. Older personal/user overrides remain in the legacy read set.
 
 | Command                              | Description                              |
 | ------------------------------------ | ---------------------------------------- |
+| `/supermemory:save`           | Save important project knowledge         |
+| `/supermemory:search`         | Search saved project context              |
 | `/supermemory:index`          | Index codebase architecture and patterns |
 | `/supermemory:project-config` | Configure project-level settings         |
 | `/supermemory:logout`         | Clear saved credentials                  |
