@@ -33,7 +33,7 @@ Your agent remembers what you worked on - across sessions, across projects.
 > /plugin uninstall claude-supermemory@supermemory-plugins
 > ```
 
-Set your API key (get one at [app.supermemory.ai](https://app.supermemory.ai)):
+Set your API key (get one at [console.supermemory.ai](https://console.supermemory.ai)):
 
 ```bash
 export SUPERMEMORY_CC_API_KEY="sm_..."
